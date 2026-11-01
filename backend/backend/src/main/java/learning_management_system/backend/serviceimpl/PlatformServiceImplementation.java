@@ -83,9 +83,9 @@ public class PlatformServiceImplementation implements PlatformService {
     private final UserMapper userMapper;
     private final PlatformSupportAccessMapper supportAccessMapper;
 
-    public PlatformServiceImplementation(TenantRepository tenants, TenantSettingsRepository settings, TenantDomainRepository domains,
-                                         InstitutionRepository institutions, UserRepository users,
-                                         PlatformUserProfileRepository platformProfiles,
+    public PlatformServiceImplementation(TenantRepository tenants, TenantSettingsRepository settings,
+                                         TenantDomainRepository domains, InstitutionRepository institutions,
+                                         UserRepository users, PlatformUserProfileRepository platformProfiles,
                                          PlatformSupportAccessRepository supportAccess, AuditLogRepository auditLog,
                                          UserProvisioningService provisioning, AuthService auth, SystemTx sys,
                                          UserService userService, TenantMapper tenantMapper, UserMapper userMapper,

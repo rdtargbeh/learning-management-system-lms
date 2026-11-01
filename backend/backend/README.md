@@ -25,9 +25,9 @@ domain's classes are found by name (`Course`, `CourseDto`, `CourseMapper`, `Cour
 | `utility/` | Small helpers (`Patch`). |
 | `specification/` | For JPA Specifications (dynamic search filters) when a feature needs them. |
 | `src/main/resources/db/schema/` | The database schema: one SQL file per domain, plus `run_all.sql`. This is the source of truth. |
-| `scripts/` | `gen_entities.py` (regenerates entities, repositories and enums), `catalog.sql`, `api_smoke_test.py` (61 end-to-end checks). |
+| `scripts/` | `gen_entities.py` (regenerates entities, repositories and enums), `catalog.sql`, `api_smoke_test.py` (61 identity/tenancy checks), `api_test_courses.py` (184 course/enrollment checks), `api_test_content.py` (145 content/module checks). Run them in that order on a fresh database. |
 
-So far services and controllers exist for **tenancy and identity**.
+So far services and controllers exist for **tenancy, identity, academic structure, courses, enrollment, content and modules**.
 
 ## How multi-tenancy works
 - One shared schema, `lms_core`. Every table has `tenant_id`, and PostgreSQL row-level security (RLS) enforces isolation.
@@ -77,9 +77,41 @@ Every endpoint except `POST /api/v1/auth/login` requires `Authorization: Bearer 
 | Roles | `GET/POST /roles` · `PATCH /roles/{id}` · `GET /permissions` · `GET/POST /users/{id}/roles` · `DELETE /users/{id}/roles/{userRoleId}` |
 | Observers | `POST /observer-links` · `POST /observer-links/{id}/revoke` · `GET /users/{id}/observers` · `GET /users/{id}/observing` |
 | Institution | `GET /tenant` · `GET/PATCH /tenant/settings` |
+| Academic structure | `GET/POST /org-units` · `PATCH /org-units/{id}` · `GET/POST /terms` · `GET /terms/current` · `PATCH /terms/{id}` · `GET/POST /course-categories` · `PATCH /course-categories/{id}` |
+| Courses | `POST/GET /courses` (filters: `termId`, `status`, `categoryId`, `orgUnitId`, `q`) · `GET /courses/mine` · `GET/PATCH /courses/{id}` · `POST /courses/{id}/publish|unpublish|conclude|archive|unarchive` · `PUT /courses/{id}/self-enrollment` |
+| Sections | `GET/POST /courses/{id}/sections` · `GET/PATCH /sections/{id}` · `POST /sections/{id}/crosslist|uncrosslist` · `GET/POST /sections/{id}/staff` · `DELETE /sections/{id}/staff/{staffId}` |
+| Enrollment | `GET/POST /sections/{id}/enrollments` · `POST /enrollments/self` (code) · `GET /enrollments/{id}` · `PATCH /enrollments/{id}/status` · `GET /users/{id}/enrollments` |
+| Waitlist | `GET/POST /sections/{id}/waitlist` · `GET /waitlist/mine` · `POST /waitlist/{id}/accept|decline|leave` |
+| Groups | `GET/POST /courses/{id}/group-sets` · `GET/POST /group-sets/{id}/groups` · `GET/POST /groups/{id}/members` · `DELETE /groups/{id}/members/{userId}` |
+| Content types | `GET/POST /content-types` |
+| Modules | `GET/POST /courses/{id}/modules` · `PUT /courses/{id}/modules/order` · `GET/PATCH/DELETE /modules/{id}` · `POST /modules/{id}/publish[?includeItems=true]|unpublish` · `PUT /modules/{id}/prerequisites` · `POST /modules/{id}/requirements` · `DELETE /modules/{id}/requirements/{reqId}` · `PUT /modules/{id}/items/order` · `GET /modules/{id}/progress` |
+| Content | `GET/POST /courses/{id}/content` (filter: `type`) · `GET /courses/{id}/front-page` · `GET/PATCH/DELETE /content/{id}` · `POST /content/{id}/publish|unpublish|move` · `POST/DELETE /content/{id}/done` · `GET /content/{id}/progress` |
 
 Authorization: institution admins (`TENANT_ADMIN`) can do everything in their institution. Other users need permissions
-granted through roles (`USER_READ`, `USER_MANAGE`, `ROLE_MANAGE`, `OBSERVER_MANAGE`, `TENANT_SETTINGS_MANAGE`). Everyone can read and edit their own basic profile.
+granted through roles (`USER_READ`, `USER_MANAGE`, `ROLE_MANAGE`, `OBSERVER_MANAGE`, `TENANT_SETTINGS_MANAGE`,
+`ACADEMIC_STRUCTURE_MANAGE`, `COURSE_READ`, `COURSE_MANAGE`, `ENROLLMENT_MANAGE`). Everyone can read and edit their own basic profile.
+Permissions are read at sign-in, so a newly assigned role applies from the next sign-in.
+
+Course-level rights come from section staff assignments, as in Canvas and Blackboard (`security/CourseAccess`):
+- **Teachers** (PRIMARY, CO_INSTRUCTOR) edit, publish and conclude their course, manage its roster, and create groups.
+  Catalog fields (code, term, credits, seats ...) need `COURSE_MANAGE`.
+- **TAs, graders and reviewers** see the course and the roster.
+- **Students and observers** see a course only while it is published or concluded and they are enrolled.
+
+Seats: active STUDENT, AUDIT and VISITING enrollments take a seat (observers do not), and so does an open waitlist offer.
+The section row is locked while seats change, so parallel enrollments cannot overfill a section.
+When a seat frees up (withdrawal, more capacity, a declined offer) the next waitlisted student is enrolled automatically,
+or offered the seat if they asked for an offer.
+
+Modules work like Canvas modules (`serviceimpl/ModuleProgressServiceImplementation`):
+- **Locks:** a module is LOCKED for a student while the teacher locks it, its unlock date is in the future, or a
+  prerequisite (an earlier module) is not completed.
+- **Progress:** an unlocked module is UNLOCKED, then STARTED, then COMPLETED once every requirement is met. Requirements
+  are VIEW or MARK_DONE on an item. A module without requirements counts as completed.
+- **Sequential progress:** every item after the first unmet requirement stays locked.
+- **What students see:** only published modules and items. INSTRUCTOR_ONLY items stay hidden, and modules for another
+  section are not shown. Locked items come back without their body and with a `lockReason`.
+- Opening an item records a view. Progress is kept in `student_content_progress` and `student_module_progress`.
 
 ## After a schema change
 ```
@@ -90,7 +122,10 @@ Never edit generated entities or enums by hand. Put custom queries in the hand-w
 (the generator never overwrites those).
 
 ## Not done yet
-- Services and controllers for the other 28 domains: courses and enrollment, content, assignments, grading, quizzes, etc. The entities and repositories for them already exist.
+- Services and controllers for the other domains: assignments, grading, quizzes, discussions, etc. The entities and repositories for them already exist.
+- In academic structure and enrollment, not built yet: course prerequisites, meeting schedules, blueprint courses, course navigation, differentiation tags, observer pairing codes, group leaders.
+- In content, not built yet: content blocks, interactive/SCORM details, per-user content permissions (RESTRICTED items stay hidden), release conditions, mastery paths, course pacing, file uploads. SUBMIT / MIN_SCORE / CONTRIBUTE module requirements arrive with assignments, quizzes and discussions.
+- Waitlist offers do not expire on their own yet (needs a scheduled job).
 - MFA verification at sign-in. Platform users are flagged `mfa_required`, but TOTP is not enforced yet.
 - Refresh tokens and sign-out (tokens are short-lived access tokens only).
 - SSO (SAML/OIDC) sign-in flows.

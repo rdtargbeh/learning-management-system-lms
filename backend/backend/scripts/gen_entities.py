@@ -184,7 +184,13 @@ def gen_repo(C):
 # Repositories with hand-written queries; the generator never overwrites these.
 HANDWRITTEN_REPOS = {'users', 'user_profile', 'platform_user_profile', 'student_profile', 'employee_profile',
                      'academic_advisor_profile', 'observer_student_link', 'roles', 'permissions', 'role_permissions',
-                     'user_role', 'tenant', 'tenant_domain', 'tenant_settings', 'institution', 'platform_support_access'}
+                     'user_role', 'tenant', 'tenant_domain', 'tenant_settings', 'institution', 'platform_support_access',
+                     # academic structure + enrollment
+                     'org_unit', 'academic_term', 'course_category', 'course', 'course_section', 'course_instructor',
+                     'enrollment', 'waitlist', 'group_set', 'student_group', 'group_members',
+                     # content + modules
+                     'content_type', 'content', 'video_lecture', 'course_module', 'module_prerequisite',
+                     'module_completion_requirement', 'student_module_progress', 'student_content_progress'}
 import json as _json
 for d in ('entity', 'repository', 'enums'): os.makedirs(f'{OUT}/{d}', exist_ok=True)
 n = e = 0

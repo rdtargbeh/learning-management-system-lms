@@ -39,6 +39,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -65,10 +67,11 @@ public class UserServiceImplementation implements UserService {
     private final UserProvisioningService provisioning;
     private final UserMapper userMapper;
 
-    public UserServiceImplementation(UserRepository users, UserProfileRepository profiles, StudentProfileRepository students,
-                                     EmployeeProfileRepository employees, AcademicAdvisorProfileRepository advisors,
-                                     PasswordEncoder encoder, PlatformUserProfileRepository platformProfiles,
-                                     UserProvisioningService provisioning, UserMapper userMapper) {
+    public UserServiceImplementation(UserRepository users, UserProfileRepository profiles,
+                                     StudentProfileRepository students, EmployeeProfileRepository employees,
+                                     AcademicAdvisorProfileRepository advisors, PasswordEncoder encoder,
+                                     PlatformUserProfileRepository platformProfiles, UserProvisioningService provisioning,
+                                     UserMapper userMapper) {
         this.users = users;
         this.profiles = profiles;
         this.students = students;
@@ -219,6 +222,13 @@ public class UserServiceImplementation implements UserService {
                 userMapper.toDto(employees.findByUserId(id).orElse(null)),
                 userMapper.toDto(advisors.findByUserId(id).orElse(null)),
                 userMapper.toDto(platformProfiles.findByUserId(id).orElse(null)));
+    }
+
+    @Override
+    public Map<UUID, UserSummaryDto> summariesById(Collection<UUID> userIds) {
+        if (userIds.isEmpty()) return Map.of();
+        return toSummaries(users.findAllById(new HashSet<>(userIds))).stream()
+                .collect(Collectors.toMap(UserSummaryDto::userId, Function.identity()));
     }
 
     private <P> P newProfile(UUID userId, java.util.function.Supplier<P> ctor) {

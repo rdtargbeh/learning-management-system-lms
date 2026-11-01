@@ -59,10 +59,10 @@ public class AuthServiceImplementation implements AuthService {
     private final TokenService tokens;
     private final UserService userService;
 
-    public AuthServiceImplementation(SystemTx sys, UserRepository users, TenantRepository tenants, UserRoleRepository userRoles,
-                                     RolePermissionRepository rolePermissions, PlatformUserProfileRepository platformProfiles,
-                                     LoginHistoryRepository loginHistory, PasswordEncoder encoder, TokenService tokens,
-                                     UserService userService) {
+    public AuthServiceImplementation(SystemTx sys, UserRepository users, TenantRepository tenants,
+                                     UserRoleRepository userRoles, RolePermissionRepository rolePermissions,
+                                     PlatformUserProfileRepository platformProfiles, LoginHistoryRepository loginHistory,
+                                     PasswordEncoder encoder, TokenService tokens, UserService userService) {
         this.sys = sys;
         this.users = users;
         this.tenants = tenants;

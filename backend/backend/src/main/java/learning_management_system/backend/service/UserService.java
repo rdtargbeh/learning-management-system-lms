@@ -14,7 +14,9 @@ import learning_management_system.backend.entity.User;
 import learning_management_system.backend.enums.AccountStatus;
 import learning_management_system.backend.enums.UserType;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -53,4 +55,7 @@ public interface UserService {
 
     /** A user with every profile that exists for them. */
     UserDetailDto toDetail(User u);
+
+    /** Summaries keyed by user id, for rosters and member lists (users the caller's tenant cannot see are left out). */
+    Map<UUID, UserSummaryDto> summariesById(Collection<UUID> userIds);
 }

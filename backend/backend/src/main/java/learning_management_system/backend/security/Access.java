@@ -23,9 +23,16 @@ public final class Access {
     /** Institution admin, support session, or an explicit permission. */
     public static void requireTenantPermission(String permission) {
         requireTenant();
+        if (!hasTenantPermission(permission)) throw ApiException.forbidden("Missing permission " + permission);
+    }
+
+    /** True for an institution admin, a support session, or a caller whose roles grant one of the permissions. */
+    public static boolean hasTenantPermission(String... permissions) {
         RequestContext c = ctx();
-        boolean ok = "TENANT_ADMIN".equals(c.userType()) || c.supportAccessId() != null || c.permissions().contains(permission);
-        if (!ok) throw ApiException.forbidden("Missing permission " + permission);
+        if (c.tenantId() == null) return false;
+        if ("TENANT_ADMIN".equals(c.userType()) || c.supportAccessId() != null) return true;
+        for (String p : permissions) if (c.permissions().contains(p)) return true;
+        return false;
     }
 
     public static boolean isSelf(java.util.UUID userId) {

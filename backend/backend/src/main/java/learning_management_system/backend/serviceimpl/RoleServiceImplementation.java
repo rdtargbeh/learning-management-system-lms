@@ -41,8 +41,9 @@ public class RoleServiceImplementation implements RoleService {
     private final UserRepository users;
     private final RoleMapper roleMapper;
 
-    public RoleServiceImplementation(RoleRepository roles, PermissionRepository permissions, RolePermissionRepository rolePermissions,
-                                     UserRoleRepository userRoles, UserRepository users, RoleMapper roleMapper) {
+    public RoleServiceImplementation(RoleRepository roles, PermissionRepository permissions,
+                                     RolePermissionRepository rolePermissions, UserRoleRepository userRoles,
+                                     UserRepository users, RoleMapper roleMapper) {
         this.roles = roles;
         this.permissions = permissions;
         this.rolePermissions = rolePermissions;
