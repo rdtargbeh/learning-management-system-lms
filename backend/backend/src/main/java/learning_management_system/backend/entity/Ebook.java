@@ -1,5 +1,4 @@
-package learning_management_system.backend.entity;//package backend.chatgpt_build_lms.entity;
-
+package learning_management_system.backend.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 

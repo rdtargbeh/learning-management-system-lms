@@ -1,7 +1,8 @@
-package learning_management_system.backend.entity;//package backend.chatgpt_build_lms.entity;
+package learning_management_system.backend.entity;
 
-import backend.chatgpt_build_lms.enums.EbookAnnotationType;
+
 import jakarta.persistence.*;
+import learning_management_system.backend.enums.EbookAnnotationType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
