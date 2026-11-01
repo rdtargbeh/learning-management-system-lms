@@ -22,9 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -103,6 +101,17 @@ public class RoleServiceImplementation implements RoleService {
         // Update fields of the existing role using RoleDto
         mapRoleDtoToEntity(roleDto, role); // Inline method to handle in-place updates
 
+        // Set updatedBy user
+        User updatedBy = userRepository.findById(roleDto.getUpdatedBy())
+                .orElseThrow(() -> new RuntimeException("User not found with ID: " + roleDto.getUpdatedBy()));
+
+        role.setUpdatedBy(updatedBy);
+
+        role.setRoleName(roleDto.getRoleName());
+        role.setDescription(roleDto.getDescription());
+        role.setRoleType(roleDto.getRoleType());
+        role.setPriority(role.getPriority());
+
         // Save the updated role
         Role updatedRole = roleRepository.save(role);
 
@@ -138,47 +147,6 @@ public class RoleServiceImplementation implements RoleService {
 
         // Handle Tenant and ParentRole in the service layer as needed
     }
-
-
-//    @Override
-//    public RoleDto updateRole(Long roleId, RoleDto roleDto) {
-//        Role role = roleRepository.findById(roleId)
-//                .orElseThrow(() -> new RuntimeException("Role not found with ID: " + roleId));
-//
-//        // Check for duplicate role name within the same tenant
-//        if (roleDto.getTenantId() != null) {
-//            roleRepository.findByRoleNameAndTenant_TenantId(roleDto.getRoleName(), roleDto.getTenantId())
-//                    .ifPresent(existingRole -> {
-//                        if (!existingRole.getRoleId().equals(roleId)) {
-//                            throw new RuntimeException("Role with the same name already exists for the tenant.");
-//                        }
-//                    });
-//        } else {
-//            roleRepository.findByRoleNameAndTenant_TenantId(roleDto.getRoleName(), null)
-//                    .ifPresent(existingRole -> {
-//                        if (!existingRole.getRoleId().equals(roleId)) {
-//                            throw new RuntimeException("Global role with the same name already exists.");
-//                        }
-//                    });
-//        }
-//
-//        // Update role fields
-//        RoleMapper.toEntity(roleDto);
-//
-//        // Set updatedBy user
-//        User updatedBy = userRepository.findById(roleDto.getUpdatedBy())
-//                .orElseThrow(() -> new RuntimeException("User not found with ID: " + roleDto.getUpdatedBy()));
-//
-//        role.setUpdatedBy(updatedBy);
-//
-//        role.setRoleName(roleDto.getRoleName());
-//        role.setDescription(roleDto.getDescription());
-//        role.setRoleType(roleDto.getRoleType());
-//        role.setPriority(role.getPriority());
-//
-//        return roleMapper.toDto(roleRepository.save(role));
-//    }
-
 
     @Override
     public List<Role> getAllRoles() {
@@ -230,24 +198,41 @@ public class RoleServiceImplementation implements RoleService {
         // Fetch the role
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found."));
-
         // Fetch the permissions
         List<Permission> permissions = permissionRepository.findAllById(permissionIds);
 
-        // Validate permissions
-        permissions.forEach(permission -> {
-            if (!permission.getActive()) {
+        if (permissions.isEmpty()) {
+            throw new RuntimeException("No valid permissions found for the given IDs.");
+        }
+
+        // Validate and assign permissions
+        for (Permission permission : permissions) {
+            if (!Boolean.TRUE.equals(permission.getActive())) {
                 throw new RuntimeException("Inactive permission: " + permission.getPermissionName());
             }
-
-            // Validate cross-tenant assignment
-            if (permission.getRole() != null && !permission.getRole().getTenant().equals(role.getTenant())) {
+            // Check cross-tenant assignment
+            if (permission.getRole() != null &&
+                    !Objects.equals(Optional.ofNullable(permission.getRole().getTenant()).orElse(null),
+                            Optional.ofNullable(role.getTenant()).orElse(null))) {
                 throw new RuntimeException("Cross-tenant permission assignment is not allowed.");
             }
+            // Assign permission only if it's not already assigned
+            if (!role.getPermissions().contains(permission)) {
+                permission.setRole(role);
+            }
+        }
 
-            // Assign permission to the role
-            permission.setRole(role);
-        });
+//        permissions.forEach(permission -> {
+//            if (!permission.getActive()) {
+//                throw new RuntimeException("Inactive permission: " + permission.getPermissionName());
+//            }
+//            // Validate cross-tenant assignment
+//            if (permission.getRole() != null && !permission.getRole().getTenant().equals(role.getTenant())) {
+//                throw new RuntimeException("Cross-tenant permission assignment is not allowed.");
+//            }
+//            // Assign permission to the role
+//            permission.setRole(role);
+//        });
 
         // Update role's permissions
         role.getPermissions().addAll(permissions);
@@ -328,5 +313,48 @@ public class RoleServiceImplementation implements RoleService {
         return userRepository.findByUserName(username)
                 .orElseThrow(() -> new RuntimeException("Current user not found!"));
     }
+
+
+
+
+//    @Override
+//    public RoleDto updateRole(Long roleId, RoleDto roleDto) {
+//        Role role = roleRepository.findById(roleId)
+//                .orElseThrow(() -> new RuntimeException("Role not found with ID: " + roleId));
+//
+//        // Check for duplicate role name within the same tenant
+//        if (roleDto.getTenantId() != null) {
+//            roleRepository.findByRoleNameAndTenant_TenantId(roleDto.getRoleName(), roleDto.getTenantId())
+//                    .ifPresent(existingRole -> {
+//                        if (!existingRole.getRoleId().equals(roleId)) {
+//                            throw new RuntimeException("Role with the same name already exists for the tenant.");
+//                        }
+//                    });
+//        } else {
+//            roleRepository.findByRoleNameAndTenant_TenantId(roleDto.getRoleName(), null)
+//                    .ifPresent(existingRole -> {
+//                        if (!existingRole.getRoleId().equals(roleId)) {
+//                            throw new RuntimeException("Global role with the same name already exists.");
+//                        }
+//                    });
+//        }
+//
+//        // Update role fields
+//        RoleMapper.toEntity(roleDto);
+//
+//        // Set updatedBy user
+//        User updatedBy = userRepository.findById(roleDto.getUpdatedBy())
+//                .orElseThrow(() -> new RuntimeException("User not found with ID: " + roleDto.getUpdatedBy()));
+//
+//        role.setUpdatedBy(updatedBy);
+//
+//        role.setRoleName(roleDto.getRoleName());
+//        role.setDescription(roleDto.getDescription());
+//        role.setRoleType(roleDto.getRoleType());
+//        role.setPriority(role.getPriority());
+//
+//        return roleMapper.toDto(roleRepository.save(role));
+//    }
+
 
 }

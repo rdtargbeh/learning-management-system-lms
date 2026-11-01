@@ -2,6 +2,7 @@ package learning_management_system.backend.mapper;
 
 import learning_management_system.backend.dto.CourseDto;
 import learning_management_system.backend.entity.*;
+import learning_management_system.backend.repository.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 

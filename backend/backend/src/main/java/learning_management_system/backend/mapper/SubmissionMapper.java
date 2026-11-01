@@ -4,6 +4,7 @@ import learning_management_system.backend.dto.SubmissionDto;
 import learning_management_system.backend.entity.*;
 import learning_management_system.backend.enums.GradingStatus;
 import learning_management_system.backend.enums.SubmissionStatus;
+import learning_management_system.backend.repository.*;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

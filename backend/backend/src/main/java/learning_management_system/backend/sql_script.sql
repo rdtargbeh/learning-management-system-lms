@@ -123,7 +123,7 @@ CREATE TABLE Roles (
     role_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     role_name VARCHAR(100) NOT NULL,
     description VARCHAR(255),
-    role_type ENUM('GLOBAL', 'TENANT', 'SYSTEM') NOT NULL,
+    role_type VARCHAR(20) NOT NULL,
     parent_role_id BIGINT,
     tenant_id BIGINT,
     priority INT NOT NULL DEFAULT 0,
@@ -142,6 +142,13 @@ CREATE TABLE Roles (
 );
 
 
+-- Modify role type column
+ALTER TABLE roles MODIFY COLUMN role_type ENUM(
+    'GLOBAL', 'TENANT', 'SYSTEM', 'USERS', 'INSTRUCTOR', 'ADMIN', 'STUDENT', 'STAFF'
+) NOT NULL;
+
+ALTER TABLE roles MODIFY COLUMN role_type VARCHAR(20) NOT NULL;
+
 
 -- CREATE PERMISSION TABLE   +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 CREATE TABLE Permissions (
@@ -152,12 +159,15 @@ CREATE TABLE Permissions (
     action ENUM('CREATE', 'READ', 'UPDATE', 'DELETE', 'MANAGE', 'EXECUTE') NOT NULL,
     scope VARCHAR(50) NOT NULL,  -- SYSTEM, TENANT, RESOURCE
     role_id BIGINT NOT NULL,
+     group_id BIGINT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     conditions TEXT,  -- JSON or other custom conditions
     expires_at TIMESTAMP NULL,
     date_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     date_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     parent_permission_id BIGINT,
+    priority INT NOT NULL DEFAULT 0,
+    is_deleted BOOLEAN NOT NULL DEFAULT false,
     metadata TEXT,  -- Custom metadata
 
     -- Foreign Keys
