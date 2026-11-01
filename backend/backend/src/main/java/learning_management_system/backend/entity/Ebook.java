@@ -1,68 +1,99 @@
 package learning_management_system.backend.entity;
-import jakarta.persistence.*;
-import lombok.Data;
 
-import java.time.LocalDateTime;
+import jakarta.persistence.*;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.EbookSourceType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
 
 /**
- * Represents an ebook resource in the LMS.
+ * Table <b>ebook</b> (E-Book Platform domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
  */
-
-@Data
 @Entity
-@Table(name = "ebook")
-public class Ebook {
+@Table(name = "ebook", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class Ebook implements TenantScoped {
 
-    /** Unique identifier for the ebook. */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ebook_id", nullable = false, updatable = false)
-    private Long ebookId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "ebook_id", updatable = false)
+    private UUID ebookId;
 
-    /** Title of the ebook. */
-    @Column(name = "title", nullable = false, length = 255)
-    private String title;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    /** Author(s) of the ebook. */
-    @Column(name = "author", nullable = false, length = 255)
+    @Column(name = "course_id", nullable = false)
+    private UUID courseId;
+
+    @Column(name = "ebook_title", nullable = false, length = 255)
+    private String ebookTitle;
+
+    @Column(name = "ebook_description")
+    private String ebookDescription;
+
+    @Column(name = "author", length = 255)
     private String author;
 
-    /** Description or summary of the ebook. */
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "publisher", length = 255)
+    private String publisher;
 
-    /** Path or URL to the stored ebook file. */
-    @Column(name = "file_path", nullable = false, length = 500)
-    private String filePath;
+    @Column(name = "isbn", length = 20)
+    private String isbn;
 
-    /** Format of the ebook (e.g., PDF, EPUB). */
-    @Column(name = "file_type", nullable = false, length = 50)
-    private String fileType;
+    @Column(name = "publication_year")
+    private Integer publicationYear;
 
-    /** Indicates if the ebook supports interactive content. */
-    @Column(name = "is_interactive", nullable = false)
-    private Boolean isInteractive = false;
+    @Column(name = "cover_image_url", length = 500)
+    private String coverImageUrl;
 
-    /** Many-to-One relationship with the Course entity. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id", nullable = false)
-    private Course course;
+    @Column(name = "language", length = 10)
+    private String language;
 
-    /** Tags for categorization and search. */
-    @Column(name = "tags", columnDefinition = "TEXT")
-    private String tags;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", nullable = false, length = 50)
+    private EbookSourceType sourceType;
 
-    /** Metadata for extensibility. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
+    @Column(name = "third_party_provider", length = 100)
+    private String thirdPartyProvider;
 
-    /** Timestamp for when the ebook was uploaded. */
-    @Column(name = "upload_date", nullable = false)
-    private LocalDateTime uploadDate = LocalDateTime.now();
+    @Column(name = "third_party_id", length = 255)
+    private String thirdPartyId;
 
-    /** Timestamp for when the ebook was last updated. */
-    @Column(name = "updated_date", nullable = false)
-    private LocalDateTime updatedDate = LocalDateTime.now();
+    @Column(name = "third_party_access_url", length = 500)
+    private String thirdPartyAccessUrl;
 
-    // Getters and setters omitted for brevity
+    @Column(name = "is_required_reading")
+    private Boolean isRequiredReading;
+
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
+    @Column(name = "date_assigned")
+    private LocalDate dateAssigned;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }

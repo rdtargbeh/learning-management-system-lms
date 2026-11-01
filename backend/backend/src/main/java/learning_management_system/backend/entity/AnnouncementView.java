@@ -1,61 +1,63 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
 
-import java.time.LocalDateTime;
-
-@CrossOrigin("*")
+/**
+ * Table <b>announcement_view</b> (Announcements & Notifications domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
 @Entity
-@Table(name = "announcement_views")
-public class AnnouncementView {
+@Table(name = "announcement_view", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class AnnouncementView implements TenantScoped {
+
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "view_id", updatable = false)
+    private UUID viewId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "announcement_id", nullable = false)
-    private Announcement announcement;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    @Column(name = "announcement_id", nullable = false)
+    private UUID announcementId;
 
-    @Column(name = "viewed_at", nullable = false)
-    private LocalDateTime viewedAt = LocalDateTime.now();
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
+    @Column(name = "view_count")
+    private Integer viewCount;
 
-    // Getters and Setters
-    public Long getId() {
-        return id;
-    }
+    @Column(name = "is_read")
+    private Boolean isRead;
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    @Column(name = "date_first_viewed", nullable = false)
+    private OffsetDateTime dateFirstViewed;
 
-    public Announcement getAnnouncement() {
-        return announcement;
-    }
+    @Column(name = "date_last_viewed", nullable = false)
+    private OffsetDateTime dateLastViewed;
 
-    public void setAnnouncement(Announcement announcement) {
-        this.announcement = announcement;
-    }
+    @Column(name = "date_read")
+    private OffsetDateTime dateRead;
 
-    public User getUser() {
-        return user;
-    }
+    @Column(name = "read_confirmation_submitted")
+    private Boolean readConfirmationSubmitted;
 
-    public void setUser(User user) {
-        this.user = user;
-    }
-
-    public LocalDateTime getViewedAt() {
-        return viewedAt;
-    }
-
-    public void setViewedAt(LocalDateTime viewedAt) {
-        this.viewedAt = viewedAt;
-    }
+    @Column(name = "confirmation_submitted_at")
+    private OffsetDateTime confirmationSubmittedAt;
 }
-

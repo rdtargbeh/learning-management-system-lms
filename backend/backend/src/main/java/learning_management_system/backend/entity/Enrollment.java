@@ -1,165 +1,100 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
-import learning_management_system.backend.enums.EnrollmentStatus;
-import learning_management_system.backend.utility.EnrollmentId;
-import org.springframework.web.bind.annotation.CrossOrigin;
-
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.EnrollmentSource;
+import learning_management_system.backend.enums.EnrollmentStatus;
+import learning_management_system.backend.enums.EnrollmentType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
 
 /**
- * Represents a student's enrollment in a course within the LMS system.
+ * Table <b>enrollment</b> (Enrollment Management domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
  */
-
-@CrossOrigin("*")
 @Entity
-@Table(
-        name = "enrollments",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"course_id", "student_id"})
-)
-public class Enrollment {
+@Table(name = "enrollment", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class Enrollment implements TenantScoped {
 
-    /** Unique identifier for the enrollment. */
-    @EmbeddedId
-    private EnrollmentId enrollmentId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "enrollment_id", updatable = false)
+    private UUID enrollmentId;
 
-    /** Many-to-One relationship with the Course entity. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("courseId")
-    @JoinColumn(name = "course_id", nullable = false)
-    private Course course;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    /** Many-to-One relationship with the Student entity. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("studentId")
-    @JoinColumn(name = "student_id", nullable = false)
-    private Student student;
+    @Column(name = "section_id", nullable = false)
+    private UUID sectionId;
 
-    /** Date the student enrolled in the course. */
-    @Column(name = "enrollment_date", nullable = false)
-    private LocalDate enrollmentDate = LocalDate.now();
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
 
-    /** Status of the enrollment (e.g., ACTIVE, COMPLETED, DROPPED). */
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private EnrollmentStatus status = EnrollmentStatus.ACTIVE;
+    @Column(name = "enrollment_type", length = 50)
+    private EnrollmentType enrollmentType;
 
-    /** Grade the student achieved in the course. */
-    @Column(name = "grade")
-    private Double grade;
+    @Column(name = "observed_user_id")
+    private UUID observedUserId;
 
-    /** Percentage of attendance for the course. */
-    @Column(name = "attendance_percentage")
-    private Double attendancePercentage;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "enrollment_status", nullable = false, length = 50)
+    private EnrollmentStatus enrollmentStatus;
 
-    /** Date the course was completed by the student. */
-    @Column(name = "completion_date")
-    private LocalDate completionDate;
+    @Column(name = "sis_source_id", length = 255)
+    private String sisSourceId;
 
-    @Column(name = "is_deleted", nullable = false)
-    private Boolean isDeleted = false;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "enrollment_source", nullable = false, length = 20)
+    private EnrollmentSource enrollmentSource;
 
+    @Column(name = "limit_to_section", nullable = false)
+    private Boolean limitToSection;
 
-    /** Metadata for extensibility. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
+    @Column(name = "date_enrolled", nullable = false)
+    private LocalDate dateEnrolled;
 
+    @Column(name = "date_started")
+    private LocalDate dateStarted;
 
+    @Column(name = "date_withdrawn")
+    private LocalDate dateWithdrawn;
 
-    // Constructor
-    public Enrollment() {}
+    @Column(name = "date_completed")
+    private LocalDate dateCompleted;
 
-    public Enrollment(EnrollmentId enrollmentId, Course course, Student student, LocalDate enrollmentDate, EnrollmentStatus status, Double grade, Double attendancePercentage, LocalDate completionDate, Boolean isDeleted, String metadata) {
-        this.enrollmentId = enrollmentId;
-        this.course = course;
-        this.student = student;
-        this.enrollmentDate = enrollmentDate;
-        this.status = status;
-        this.grade = grade;
-        this.attendancePercentage = attendancePercentage;
-        this.completionDate = completionDate;
-        this.isDeleted = isDeleted;
-        this.metadata = metadata;
-    }
+    @Column(name = "date_last_activity")
+    private OffsetDateTime dateLastActivity;
 
-    // Getters and Setters
-    public EnrollmentId getEnrollmentId() {
-        return enrollmentId;
-    }
+    @Column(name = "total_activity_seconds", nullable = false)
+    private Long totalActivitySeconds;
 
-    public void setEnrollmentId(EnrollmentId enrollmentId) {
-        this.enrollmentId = enrollmentId;
-    }
+    @Column(name = "is_credit_bearing")
+    private Boolean isCreditBearing;
 
-    public Course getCourse() {
-        return course;
-    }
+    @Column(name = "is_graded")
+    private Boolean isGraded;
 
-    public void setCourse(Course course) {
-        this.course = course;
-    }
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
 
-    public Student getStudent() {
-        return student;
-    }
-
-    public void setStudent(Student student) {
-        this.student = student;
-    }
-
-    public LocalDate getEnrollmentDate() {
-        return enrollmentDate;
-    }
-
-    public void setEnrollmentDate(LocalDate enrollmentDate) {
-        this.enrollmentDate = enrollmentDate;
-    }
-
-    public EnrollmentStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(EnrollmentStatus status) {
-        this.status = status;
-    }
-
-    public Double getGrade() {
-        return grade;
-    }
-
-    public void setGrade(Double grade) {
-        this.grade = grade;
-    }
-
-    public Double getAttendancePercentage() {
-        return attendancePercentage;
-    }
-
-    public void setAttendancePercentage(Double attendancePercentage) {
-        this.attendancePercentage = attendancePercentage;
-    }
-
-    public LocalDate getCompletionDate() {
-        return completionDate;
-    }
-
-    public void setCompletionDate(LocalDate completionDate) {
-        this.completionDate = completionDate;
-    }
-
-    public Boolean getDeleted() {
-        return isDeleted;
-    }
-
-    public void setDeleted(Boolean deleted) {
-        isDeleted = deleted;
-    }
-
-    public String getMetadata() {
-        return metadata;
-    }
-
-    public void setMetadata(String metadata) {
-        this.metadata = metadata;
-    }
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }

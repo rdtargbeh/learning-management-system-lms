@@ -1,58 +1,90 @@
 package learning_management_system.backend.exception;
 
+import org.hibernate.exception.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.jpa.JpaSystemException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Global exception handler for the application.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /**
-     * Handles all CustomException types.
-     */
-    @ExceptionHandler(CustomException.class)
-    public ResponseEntity<Object> handleCustomException(CustomException ex, WebRequest request) {
-        Map<String, Object> body = createErrorBody(ex.getMessage(), ex.getErrorCode(), HttpStatus.BAD_REQUEST);
-        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ErrorResponse> api(ApiException e) {
+        return ResponseEntity.status(e.status()).body(ErrorResponse.of(e.status().value(), e.code(), e.getMessage()));
     }
 
-    /**
-     * Handles IllegalArgumentException.
-     */
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
-        Map<String, Object> body = createErrorBody(ex.getMessage(), "INVALID_ARGUMENT", HttpStatus.BAD_REQUEST);
-        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> validation(MethodArgumentNotValidException e) {
+        Map<String, String> fields = new LinkedHashMap<>();
+        e.getBindingResult().getFieldErrors().forEach(f -> fields.putIfAbsent(f.getField(), f.getDefaultMessage()));
+        return ResponseEntity.badRequest().body(new ErrorResponse(OffsetDateTime.now(), 400, "VALIDATION_FAILED",
+                "Request validation failed", fields));
     }
 
-    /**
-     * Handles all other exceptions as generic internal server errors.
-     */
+    @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> unreadable(Exception e) {
+        return ResponseEntity.badRequest().body(ErrorResponse.of(400, "BAD_REQUEST", "Malformed request: " + rootMessage(e)));
+    }
+
+    /** Unique keys, foreign keys and CHECK constraints from the database surface as 409 with the constraint name. */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> integrity(DataIntegrityViolationException e) {
+        String constraint = null;
+        Throwable t = e;
+        while (t != null) {
+            if (t instanceof ConstraintViolationException cve) { constraint = cve.getConstraintName(); break; }
+            t = t.getCause();
+        }
+        String msg = constraint != null ? "Rejected by database rule " + constraint : "Rejected by a database rule";
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of(409, "CONSTRAINT_VIOLATION", msg));
+    }
+
+    /** Trigger errors (RAISE EXCEPTION) and row-level security denials arrive as JPA system exceptions. */
+    @ExceptionHandler(JpaSystemException.class)
+    public ResponseEntity<ErrorResponse> jpa(JpaSystemException e) {
+        String m = rootMessage(e);
+        if (m != null && m.contains("row-level security")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResponse.of(403, "TENANT_ISOLATION", "Not allowed in this tenant"));
+        }
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ErrorResponse.of(409, "DATABASE_RULE", m));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> denied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResponse.of(403, "FORBIDDEN", "You do not have access to this action"));
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Object> handleGlobalException(Exception ex, WebRequest request) {
-        Map<String, Object> body = createErrorBody(ex.getMessage(), "INTERNAL_SERVER_ERROR", HttpStatus.INTERNAL_SERVER_ERROR);
-        return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<ErrorResponse> other(Exception e) {
+        String m = rootMessage(e);
+        if (m != null && m.contains("row-level security")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResponse.of(403, "TENANT_ISOLATION", "Not allowed in this tenant"));
+        }
+        log.error("Unhandled error", e);
+        return ResponseEntity.internalServerError().body(ErrorResponse.of(500, "INTERNAL_ERROR", "Unexpected error"));
     }
 
-    /**
-     * Creates a structured error response body.
-     */
-    private Map<String, Object> createErrorBody(String message, String errorCode, HttpStatus status) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", status.value());
-        body.put("error", status.getReasonPhrase());
-        body.put("message", message);
-        body.put("errorCode", errorCode);
-        return body;
+    private static String rootMessage(Throwable e) {
+        Throwable t = e;
+        while (t.getCause() != null && t.getCause() != t) t = t.getCause();
+        String m = t.getMessage();
+        if (m != null && m.startsWith("ERROR: ")) m = m.substring(7);
+        if (m != null && m.contains("\n")) m = m.substring(0, m.indexOf('\n'));
+        return m;
     }
 }

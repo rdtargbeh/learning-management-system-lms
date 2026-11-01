@@ -4,10 +4,9 @@ import learning_management_system.backend.entity.NotificationTemplate;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
+import java.util.UUID;
 
+/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
-public interface NotificationTemplateRepository extends JpaRepository<NotificationTemplate, Long> {
-    Optional<NotificationTemplate> findByName(String name);
+public interface NotificationTemplateRepository extends JpaRepository<NotificationTemplate, UUID> {
 }
-

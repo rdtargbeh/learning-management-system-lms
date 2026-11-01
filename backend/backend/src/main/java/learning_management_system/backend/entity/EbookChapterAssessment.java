@@ -1,52 +1,87 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.EbookChapterAssessmentType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
 
 /**
- * Represents an assessment linked to a specific chapter in an ebook.
+ * Table <b>ebook_chapter_assessment</b> (E-Book Platform domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
  */
-
-@Data
 @Entity
-@Table(name = "ebook_chapter_assessment")
-public class EbookChapterAssessment {
+@Table(name = "ebook_chapter_assessment", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class EbookChapterAssessment implements TenantScoped {
 
-    /** Unique identifier for the assessment. */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "assessment_id", nullable = false, updatable = false)
-    private Long assessmentId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "ebook_assessment_id", updatable = false)
+    private UUID ebookAssessmentId;
 
-    /** Many-to-One relationship with the EbookChapter entity. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chapter_id", nullable = false)
-    private EbookChapter chapter;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    /** JSON or related table to store questions and options. */
-    @Column(name = "questions", columnDefinition = "TEXT")
-    private String questions;
+    @Column(name = "chapter_id", nullable = false)
+    private UUID chapterId;
 
-    /** Minimum score required to pass the assessment. */
-    @Column(name = "passing_score", nullable = false)
-    private Double passingScore;
+    @Column(name = "assessment_title", nullable = false, length = 255)
+    private String assessmentTitle;
 
-    /** Indicates if the assessment is required to unlock the next chapter. */
-    @Column(name = "is_required", nullable = false)
-    private Boolean isRequired = true;
+    @Column(name = "assessment_description")
+    private String assessmentDescription;
 
-    /** Maximum number of attempts allowed for the assessment. */
-    @Column(name = "max_attempts", nullable = true)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "assessment_type", length = 50)
+    private EbookChapterAssessmentType assessmentType;
+
+    @Column(name = "min_score_to_pass", precision = 5, scale = 2)
+    private BigDecimal minScoreToPass;
+
+    @Column(name = "allow_multiple_attempts")
+    private Boolean allowMultipleAttempts;
+
+    @Column(name = "max_attempts")
     private Integer maxAttempts;
 
-    /** Optional time limit (in minutes) for completing the assessment. */
-    @Column(name = "time_limit_minutes", nullable = true)
+    @Column(name = "time_limit_minutes")
     private Integer timeLimitMinutes;
 
-    /** Metadata for extensibility. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
+    @Column(name = "show_correct_answers")
+    private Boolean showCorrectAnswers;
 
-// Getters and setters omitted for brevity
+    @Column(name = "show_score_immediately")
+    private Boolean showScoreImmediately;
 
+    @Column(name = "is_required_to_progress")
+    private Boolean isRequiredToProgress;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }

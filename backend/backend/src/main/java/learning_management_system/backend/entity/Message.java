@@ -1,57 +1,115 @@
 package learning_management_system.backend.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
-import lombok.Data;
-
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
+import java.net.InetAddress;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.MessagePriority;
+import learning_management_system.backend.enums.MessageType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
- * Represents an individual message in a messaging thread.
+ * Table <b>message</b> (Messaging domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
  */
-@Data
 @Entity
-@Table(name = "message")
-public class Message {
+@Table(name = "message", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class Message implements TenantScoped {
 
-    /** Unique identifier for the message. */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "message_id", nullable = false, updatable = false)
-    private Long messageId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "message_id", updatable = false)
+    private UUID messageId;
 
-    /** The thread this message belongs to. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "thread_id", nullable = false)
-    private MessageThread thread;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    /** The user who sent the message. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "sender_id", nullable = false)
-    private User sender;
+    @Column(name = "thread_id", nullable = false)
+    private UUID threadId;
 
-    /** The text content of the message. */
-    @Column(name = "content", columnDefinition = "TEXT", nullable = true)
-    private String content;
+    @Column(name = "sender_id", nullable = false)
+    private UUID senderId;
 
-    /** Attachments associated with the message. */
-    @OneToMany(mappedBy = "message", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<MessageAttachment> attachments = new ArrayList<>();
+    @Column(name = "parent_message_id")
+    private UUID parentMessageId;
 
-    /** Reactions associated with the message. */
-    @OneToMany(mappedBy = "message", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<MessageReaction> reactions = new ArrayList<>();
+    @Column(name = "message_subject", length = 255)
+    private String messageSubject;
 
-    /** Boolean indicating if the message has been read. */
-    @Column(name = "is_read", nullable = false)
-    private Boolean isRead = false;
+    @Column(name = "message_content", nullable = false)
+    private String messageContent;
 
-    /** The timestamp for when the message was sent. */
-    @Column(name = "timestamp", nullable = false)
-    private LocalDateTime timestamp = LocalDateTime.now();
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "message_html")
+    private JsonNode messageHtml;
 
-    /** Metadata for extensibility. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "message_type", nullable = false, length = 50)
+    private MessageType messageType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", length = 50)
+    private MessagePriority priority;
+
+    @Column(name = "is_read_only")
+    private Boolean isReadOnly;
+
+    @Column(name = "is_pinned")
+    private Boolean isPinned;
+
+    @Column(name = "is_edited")
+    private Boolean isEdited;
+
+    @Column(name = "edited_at")
+    private OffsetDateTime editedAt;
+
+    @Column(name = "edited_by")
+    private UUID editedBy;
+
+    @Column(name = "is_deleted")
+    private Boolean isDeleted;
+
+    @Column(name = "deleted_at")
+    private OffsetDateTime deletedAt;
+
+    @Column(name = "deleted_by")
+    private UUID deletedBy;
+
+    @Column(name = "delete_reason")
+    private String deleteReason;
+
+    @Column(name = "total_reactions")
+    private Integer totalReactions;
+
+    @Column(name = "total_replies")
+    private Integer totalReplies;
+
+    @JdbcTypeCode(SqlTypes.INET)
+    @Column(name = "ip_address")
+    private InetAddress ipAddress;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }

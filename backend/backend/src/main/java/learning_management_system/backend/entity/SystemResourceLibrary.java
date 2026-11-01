@@ -1,172 +1,95 @@
 package learning_management_system.backend.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
-import learning_management_system.backend.enums.ResourceType;
-import learning_management_system.backend.enums.VisibleTo;
-import org.springframework.web.bind.annotation.CrossOrigin;
-
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.SystemResourceLibraryResourceType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
- * Represents a resource in the LMS resource library.
+ * Table <b>system_resource_library</b> (Learning Content Management domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
  */
-@CrossOrigin("*")
 @Entity
-@Table(name = "resources")
-public class SystemResourceLibrary {
+@Table(name = "system_resource_library", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class SystemResourceLibrary implements TenantScoped {
 
-    /** Unique identifier for the resource. */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "resource_id", nullable = false, updatable = false)
-    private Long resourceId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "resource_id", updatable = false)
+    private UUID resourceId;
 
-    /** Title of the resource. */
-    @Column(name = "title", nullable = false, length = 255)
-    private String title;
+    @Column(name = "tenant_id")
+    private UUID tenantId;
 
-    /** Detailed description of the resource. */
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "resource_name", nullable = false, length = 255)
+    private String resourceName;
 
-    /** Type of resource (e.g., eBook, Video, Document). */
     @Enumerated(EnumType.STRING)
     @Column(name = "resource_type", nullable = false, length = 50)
-    private ResourceType resourceType;
+    private SystemResourceLibraryResourceType resourceType;
 
-    /** URL or path to access the resource. */
-    @Column(name = "url", nullable = false, length = 255)
-    private String url;
+    @Column(name = "resource_url", length = 500)
+    private String resourceUrl;
 
-    /** Tags for categorization. */
-    @Column(name = "tags", columnDefinition = "TEXT")
-    private String tags;
+    @Column(name = "resource_description")
+    private String resourceDescription;
 
-    /** Visibility of the resource (PUBLIC, PRIVATE, TENANT_ONLY). */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "visibility", nullable = false, length = 20)
-    private VisibleTo visibility;
+    @Column(name = "creator_user_id")
+    private UUID creatorUserId;
 
-    /** The owner of the resource. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id", nullable = false)
-    private User owner;
+    @Column(name = "is_public")
+    private Boolean isPublic;
 
-    /** Metadata for extensibility. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
+    @Column(name = "is_approved")
+    private Boolean isApproved;
 
-    /** Timestamp for when the resource was created. */
-    @Column(name = "date_created", nullable = false)
-    private LocalDateTime dateCreated = LocalDateTime.now();
+    @Column(name = "date_approved")
+    private OffsetDateTime dateApproved;
 
-    /** Timestamp for when the resource was last updated. */
-    @Column(name = "date_updated", nullable = false)
-    private LocalDateTime dateUpdated = LocalDateTime.now();
+    @Column(name = "approved_by")
+    private UUID approvedBy;
 
-    public SystemResourceLibrary() {
-    }
+    @Column(name = "usage_count")
+    private Integer usageCount;
 
-    public SystemResourceLibrary(Long resourceId, String title, String description, ResourceType resourceType, String url, String tags, VisibleTo visibility, User owner, String metadata, LocalDateTime dateCreated, LocalDateTime dateUpdated) {
-        this.resourceId = resourceId;
-        this.title = title;
-        this.description = description;
-        this.resourceType = resourceType;
-        this.url = url;
-        this.tags = tags;
-        this.visibility = visibility;
-        this.owner = owner;
-        this.metadata = metadata;
-        this.dateCreated = dateCreated;
-        this.dateUpdated = dateUpdated;
-    }
+    @Column(name = "rating", precision = 2, scale = 1)
+    private BigDecimal rating;
 
-    public Long getResourceId() {
-        return resourceId;
-    }
+    @Column(name = "download_count")
+    private Integer downloadCount;
 
-    public void setResourceId(Long resourceId) {
-        this.resourceId = resourceId;
-    }
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "tags")
+    private JsonNode tags;
 
-    public String getTitle() {
-        return title;
-    }
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "metadata")
+    private JsonNode metadata;
 
-    public void setTitle(String title) {
-        this.title = title;
-    }
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public ResourceType getResourceType() {
-        return resourceType;
-    }
-
-    public void setResourceType(ResourceType resourceType) {
-        this.resourceType = resourceType;
-    }
-
-    public String getUrl() {
-        return url;
-    }
-
-    public void setUrl(String url) {
-        this.url = url;
-    }
-
-    public String getTags() {
-        return tags;
-    }
-
-    public void setTags(String tags) {
-        this.tags = tags;
-    }
-
-    public VisibleTo getVisibility() {
-        return visibility;
-    }
-
-    public void setVisibility(VisibleTo visibility) {
-        this.visibility = visibility;
-    }
-
-    public User getOwner() {
-        return owner;
-    }
-
-    public void setOwner(User owner) {
-        this.owner = owner;
-    }
-
-    public String getMetadata() {
-        return metadata;
-    }
-
-    public void setMetadata(String metadata) {
-        this.metadata = metadata;
-    }
-
-    public LocalDateTime getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(LocalDateTime dateCreated) {
-        this.dateCreated = dateCreated;
-    }
-
-    public LocalDateTime getDateUpdated() {
-        return dateUpdated;
-    }
-
-    public void setDateUpdated(LocalDateTime dateUpdated) {
-        this.dateUpdated = dateUpdated;
-    }
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }
-

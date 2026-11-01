@@ -1,358 +1,112 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
-import learning_management_system.backend.enums.DiscussionStatus;
-import learning_management_system.backend.enums.LinkedEntityType;
-import learning_management_system.backend.enums.VisibleTo;
-import learning_management_system.backend.repository.CommentRepository;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.DiscussionType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
 
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
-@CrossOrigin("*")
+/**
+ * Table <b>discussion</b> (Discussion & Collaboration domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
 @Entity
-@Table(name = "discussions")
-public class Discussion {
+@Table(name = "discussion", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class Discussion implements TenantScoped {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "discussion_id")
-    private Long discussionId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "discussion_id", updatable = false)
+    private UUID discussionId;
 
-    @Column(name = "title", nullable = false, length = 255)
-    private String title;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    @Column(name = "description", columnDefinition = "TEXT")
-    private String description;
+    @Column(name = "course_id", nullable = false)
+    private UUID courseId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id", nullable = false)
-    private Course course;
+    @Column(name = "module_id")
+    private UUID moduleId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "author_id", nullable = false)
-    private User author;
+    @Column(name = "group_set_id")
+    private UUID groupSetId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_discussion_id")
-    private Discussion parentDiscussion;
+    @Column(name = "discussion_name", nullable = false, length = 255)
+    private String discussionName;
 
-    @Column(name = "category", length = 50)
-    private String category;
+    @Column(name = "discussion_description")
+    private String discussionDescription;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
-    private DiscussionStatus status = DiscussionStatus.OPEN;
+    @Column(name = "discussion_type", nullable = false, length = 50)
+    private DiscussionType discussionType;
 
-    @OneToOne(mappedBy = "discussion", cascade = CascadeType.ALL, orphanRemoval = true)
-    private DiscussionAnalytics analytics;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "visibility", nullable = false)
-    private VisibleTo visibility;
-
-    @Column(name = "tags", columnDefinition = "TEXT")
-    private String tags;
-
-    @Column(name = "is_pinned", nullable = false)
-    private Boolean isPinned = false;
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished;
 
     @Column(name = "is_locked", nullable = false)
-    private Boolean isLocked = false;
+    private Boolean isLocked;
 
-    @Column(name = "is_anonymous_allowed", nullable = false)
-    private Boolean isAnonymousAllowed = false;
+    @Column(name = "allow_anonymous")
+    private Boolean allowAnonymous;
 
-    @Column(name = "allow_replies", nullable = false)
-    private Boolean allowReplies = true;
+    @Column(name = "allow_rating", nullable = false)
+    private Boolean allowRating;
 
-    @OneToMany(mappedBy = "linkedEntityId", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Attachment> attachments;
+    @Column(name = "sort_by_rating", nullable = false)
+    private Boolean sortByRating;
 
-    @Column(name = "comment_count", nullable = false)
-    private Integer commentCount = 0;
+    @Column(name = "require_initial_post")
+    private Boolean requireInitialPost;
 
-    @Column(name = "moderators", columnDefinition = "TEXT")
-    private String moderators;
+    @Column(name = "require_replies")
+    private Boolean requireReplies;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "group_id", nullable = false)
-    private StudentGroup group;
+    @Column(name = "min_replies_required")
+    private Integer minRepliesRequired;
 
-    @Column(name = "settings", columnDefinition = "TEXT")
-    private String settings;
+    @Column(name = "display_order")
+    private Integer displayOrder;
 
-    @ManyToMany
-    @JoinTable(
-            name = "discussion_mentioned_users",
-            joinColumns = @JoinColumn(name = "discussion_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private Set<User> mentionedUsers = new HashSet<>();
+    @Column(name = "graded")
+    private Boolean graded;
 
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_created", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    private Date dateCreated = new Date();
+    @Column(name = "has_checkpoints", nullable = false)
+    private Boolean hasCheckpoints;
 
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_updated", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
-    private Date dateUpdated = new Date();
+    @Column(name = "points_possible", precision = 8, scale = 2)
+    private BigDecimal pointsPossible;
 
+    @Column(name = "date_available")
+    private LocalDate dateAvailable;
 
-//    /** One-to-Many relationship with the Notification entity for group notifications. */
-//    @OneToMany(mappedBy = "discussion", cascade = CascadeType.ALL, orphanRemoval = true)
-//    private List<LmsNotification> notifications = new ArrayList<>();
+    @Column(name = "date_due")
+    private LocalDate dateDue;
 
-//    @OneToMany(mappedBy = "discussion", cascade = CascadeType.ALL, orphanRemoval = true)
-//    private List<Comment> comments;
+    @Column(name = "date_close")
+    private LocalDate dateClose;
 
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
 
-    // Helper method to fetch comments for this discussion
-    public List<Comment> getComments(CommentRepository commentRepository) {
-        return commentRepository.findByLinkedEntityTypeAndLinkedEntityId(
-                LinkedEntityType.DISCUSSION,
-                this.discussionId
-        );
-    }
-
-
-    // Constructor
-    public Discussion() {}
-
-    public Discussion(Long discussionId, String title, String description, Course course, User author, Discussion parentDiscussion,
-                      String category, DiscussionStatus status, DiscussionAnalytics analytics, VisibleTo visibility, String tags,
-                      Boolean isPinned, Boolean isLocked, Boolean isAnonymousAllowed, Boolean allowReplies, List<Attachment> attachments,
-                      List<LmsNotification> notifications, List<Comment> comments, Integer commentCount, String moderators,
-                      String settings, Date dateCreated, Date dateUpdated, Set<User> mentionedUsers, StudentGroup group) {
-        this.discussionId = discussionId;
-        this.title = title;
-        this.description = description;
-        this.course = course;
-        this.author = author;
-        this.parentDiscussion = parentDiscussion;
-        this.category = category;
-        this.status = status;
-        this.analytics = analytics;
-        this.visibility = visibility;
-        this.tags = tags;
-        this.isPinned = isPinned;
-        this.isLocked = isLocked;
-        this.isAnonymousAllowed = isAnonymousAllowed;
-        this.allowReplies = allowReplies;
-        this.attachments = attachments;
-//        this.notifications = notifications;
-//        this.comments = comments;
-        this.commentCount = commentCount;
-        this.moderators = moderators;
-        this.settings = settings;
-        this.dateCreated = dateCreated;
-        this.dateUpdated = dateUpdated;
-        this.mentionedUsers = mentionedUsers;
-        this.group = group;
-    }
-
-    // Getters and setters omitted for brevity.
-    public Long getDiscussionId() {
-        return discussionId;
-    }
-
-    public void setDiscussionId(Long discussionId) {
-        this.discussionId = discussionId;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public Course getCourse() {
-        return course;
-    }
-
-    public void setCourse(Course course) {
-        this.course = course;
-    }
-
-    public User getAuthor() {
-        return author;
-    }
-
-    public void setAuthor(User author) {
-        this.author = author;
-    }
-
-    public Discussion getParentDiscussion() {
-        return parentDiscussion;
-    }
-
-    public void setParentDiscussion(Discussion parentDiscussion) {
-        this.parentDiscussion = parentDiscussion;
-    }
-
-    public String getCategory() {
-        return category;
-    }
-
-    public void setCategory(String category) {
-        this.category = category;
-    }
-
-    public DiscussionStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(DiscussionStatus status) {
-        this.status = status;
-    }
-
-    public DiscussionAnalytics getAnalytics() {
-        return analytics;
-    }
-
-    public void setAnalytics(DiscussionAnalytics analytics) {
-        this.analytics = analytics;
-    }
-
-    public VisibleTo getVisibility() {
-        return visibility;
-    }
-
-    public void setVisibility(VisibleTo visibility) {
-        this.visibility = visibility;
-    }
-
-    public String getTags() {
-        return tags;
-    }
-
-    public void setTags(String tags) {
-        this.tags = tags;
-    }
-
-    public Boolean getPinned() {
-        return isPinned;
-    }
-
-    public void setPinned(Boolean pinned) {
-        isPinned = pinned;
-    }
-
-    public Boolean getLocked() {
-        return isLocked;
-    }
-
-    public void setLocked(Boolean locked) {
-        isLocked = locked;
-    }
-
-    public Boolean getAnonymousAllowed() {
-        return isAnonymousAllowed;
-    }
-
-    public void setAnonymousAllowed(Boolean anonymousAllowed) {
-        isAnonymousAllowed = anonymousAllowed;
-    }
-
-    public Boolean getAllowReplies() {
-        return allowReplies;
-    }
-
-    public void setAllowReplies(Boolean allowReplies) {
-        this.allowReplies = allowReplies;
-    }
-
-    public List<Attachment> getAttachments() {
-        return attachments;
-    }
-
-    public void setAttachments(List<Attachment> attachments) {
-        this.attachments = attachments;
-    }
-
-    public Integer getCommentCount() {
-        return commentCount;
-    }
-
-    public void setCommentCount(Integer commentCount) {
-        this.commentCount = commentCount;
-    }
-
-    public String getModerators() {
-        return moderators;
-    }
-
-    public void setModerators(String moderators) {
-        this.moderators = moderators;
-    }
-
-    public String getSettings() {
-        return settings;
-    }
-
-    public void setSettings(String settings) {
-        this.settings = settings;
-    }
-
-    public Date getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(Date dateCreated) {
-        this.dateCreated = dateCreated;
-    }
-
-    public Date getDateUpdated() {
-        return dateUpdated;
-    }
-
-    public void setDateUpdated(Date dateUpdated) {
-        this.dateUpdated = dateUpdated;
-    }
-
-    public Set<User> getMentionedUsers() {
-        return mentionedUsers;
-    }
-
-    public void setMentionedUsers(Set<User> mentionedUsers) {
-        this.mentionedUsers = mentionedUsers;
-    }
-
-    public StudentGroup getGroup() {
-        return group;
-    }
-
-    public void setGroup(StudentGroup group) {
-        this.group = group;
-    }
-
-    //    public List<LmsNotification> getNotifications() {
-//        return notifications;
-//    }
-//
-//    public void setNotifications(List<LmsNotification> notifications) {
-//        this.notifications = notifications;
-//    }
-
-//    public List<Comment> getComments() {
-//        return comments;
-//    }
-//
-//    public void setComments(List<Comment> comments) {
-//        this.comments = comments;
-//    }
-
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }
