@@ -28,9 +28,9 @@ import learning_management_system.backend.repository.UserProfileRepository;
 import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.Permissions;
-import learning_management_system.backend.service.AuditService;
-import learning_management_system.backend.service.SessionService;
-import learning_management_system.backend.service.TenantPlanService;
+import learning_management_system.backend.service.AuditLogService;
+import learning_management_system.backend.service.UserSessionService;
+import learning_management_system.backend.service.TenantUserLimitService;
 import learning_management_system.backend.service.UserProvisioningService;
 import learning_management_system.backend.service.UserService;
 
@@ -70,15 +70,15 @@ public class UserServiceImplementation implements UserService {
     private final PlatformUserProfileRepository platformProfiles;
     private final UserProvisioningService provisioning;
     private final UserMapper userMapper;
-    private final TenantPlanService plans;
-    private final SessionService sessions;
-    private final AuditService audit;
+    private final TenantUserLimitService userLimits;
+    private final UserSessionService sessions;
+    private final AuditLogService audit;
 
     public UserServiceImplementation(UserRepository users, UserProfileRepository profiles,
                                      StudentProfileRepository students, EmployeeProfileRepository employees,
                                      AcademicAdvisorProfileRepository advisors, PasswordEncoder encoder,
                                      PlatformUserProfileRepository platformProfiles, UserProvisioningService provisioning,
-                                     UserMapper userMapper, TenantPlanService plans, SessionService sessions, AuditService audit) {
+                                     UserMapper userMapper, TenantUserLimitService userLimits, UserSessionService sessions, AuditLogService audit) {
         this.users = users;
         this.profiles = profiles;
         this.students = students;
@@ -88,7 +88,7 @@ public class UserServiceImplementation implements UserService {
         this.platformProfiles = platformProfiles;
         this.provisioning = provisioning;
         this.userMapper = userMapper;
-        this.plans = plans;
+        this.userLimits = userLimits;
         this.sessions = sessions;
         this.audit = audit;
     }
@@ -143,12 +143,12 @@ public class UserServiceImplementation implements UserService {
         User u = load(userId);
         boolean wasCounted = u.getAccountStatus() != AccountStatus.DEACTIVATED && u.getAccountStatus() != AccountStatus.DELETED;
         boolean counted = status != AccountStatus.DEACTIVATED && status != AccountStatus.DELETED;
-        if (counted && !wasCounted) plans.requireRoom(u.getTenantId(), u.getUserType());     // reactivation uses a seat
+        if (counted && !wasCounted) userLimits.requireRoom(u.getTenantId(), u.getUserType());     // reactivation uses a seat
         u.setAccountStatus(status);
         u.setDateDeactivated(status == AccountStatus.DEACTIVATED ? OffsetDateTime.now() : null);
         if (status == AccountStatus.ACTIVE) { u.setAccountLockedUntil(null); u.setFailedLoginAttempts(0); }
         users.saveAndFlush(u);
-        plans.refreshCounts(u.getTenantId());
+        userLimits.refreshCounts(u.getTenantId());
         if (status != AccountStatus.ACTIVE) sessions.revokeAll(userId);          // signed out everywhere
         audit.record("USER_STATUS_CHANGED", "USER", userId, userId, status == AccountStatus.ACTIVE ? Severity.INFO : Severity.WARNING,
                 null, Map.of("status", status.name()));
@@ -167,55 +167,6 @@ public class UserServiceImplementation implements UserService {
         users.save(u);
         sessions.revokeAll(userId);
         audit.record("PASSWORD_SET_BY_ADMIN", "USER", userId, userId, Severity.WARNING, null, null);
-    }
-
-    // ---------------------------------------------------------------- profiles
-
-    @Transactional
-    @Override
-    public UserProfileDto updateProfile(UUID userId, UserProfileDto d) {
-        if (!Access.isSelf(userId)) Access.requireTenantPermission(Permissions.USER_MANAGE);
-        load(userId);
-        UserProfile p = profiles.findByUserId(userId).orElseThrow(() -> ApiException.notFound("Profile"));
-        userMapper.updateEntity(d, p);
-        return userMapper.toDto(profiles.save(p));
-    }
-
-    @Transactional
-    @Override
-    public StudentProfileDto updateStudentProfile(UUID userId, StudentProfileDto d) {
-        Access.requireTenantPermission(Permissions.USER_MANAGE);
-        StudentProfile s = students.findByUserId(userId).orElseGet(() -> newProfile(userId, StudentProfile::new));
-        userMapper.updateEntity(d, s);
-        return userMapper.toDto(students.save(s));
-    }
-
-    @Transactional
-    @Override
-    public EmployeeProfileDto updateEmployeeProfile(UUID userId, EmployeeProfileDto d) {
-        Access.requireTenantPermission(Permissions.USER_MANAGE);
-        EmployeeProfile e = employees.findByUserId(userId).orElseGet(() -> {
-            if (d == null || d.employeeType() == null) {
-                throw ApiException.badRequest("EMPLOYEE_TYPE_REQUIRED", "employeeType is required to add an employee profile");
-            }
-            return newProfile(userId, EmployeeProfile::new);
-        });
-        userMapper.updateEntity(d, e);
-        return userMapper.toDto(employees.save(e));
-    }
-
-    @Transactional
-    @Override
-    public AcademicAdvisorProfileDto updateAdvisorProfile(UUID userId, AcademicAdvisorProfileDto d) {
-        Access.requireTenantPermission(Permissions.USER_MANAGE);
-        AcademicAdvisorProfile a = advisors.findByUserId(userId).orElseGet(() -> {
-            if (employees.findByUserId(userId).isEmpty()) {
-                throw ApiException.badRequest("EMPLOYEE_PROFILE_REQUIRED", "An advisor must have an employee profile first");
-            }
-            return newProfile(userId, AcademicAdvisorProfile::new);
-        });
-        userMapper.updateEntity(d, a);
-        return userMapper.toDto(advisors.save(a));
     }
 
     // ---------------------------------------------------------------- views (no permission check: callers decide)
@@ -251,15 +202,6 @@ public class UserServiceImplementation implements UserService {
         if (userIds.isEmpty()) return Map.of();
         return toSummaries(users.findAllById(new HashSet<>(userIds))).stream()
                 .collect(Collectors.toMap(UserSummaryDto::userId, Function.identity()));
-    }
-
-    private <P> P newProfile(UUID userId, java.util.function.Supplier<P> ctor) {
-        User u = load(userId);
-        P p = ctor.get();
-        if (p instanceof StudentProfile s) { s.setUserId(userId); s.setTenantId(u.getTenantId()); }
-        if (p instanceof EmployeeProfile e) { e.setUserId(userId); e.setTenantId(u.getTenantId()); }
-        if (p instanceof AcademicAdvisorProfile a) { a.setUserId(userId); a.setTenantId(u.getTenantId()); }
-        return p;
     }
 
     private User load(UUID userId) {

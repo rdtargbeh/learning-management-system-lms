@@ -1,49 +1,41 @@
 package learning_management_system.backend.controller;
 
-import learning_management_system.backend.dto.TenantBrandingDto;
+import learning_management_system.backend.dto.CreateTenantRequest;
+import learning_management_system.backend.dto.CreateTenantResponse;
+import learning_management_system.backend.dto.PageResponse;
 import learning_management_system.backend.dto.TenantDto;
-import learning_management_system.backend.dto.TenantSettingsDto;
-import learning_management_system.backend.dto.TenantSubscriptionDto;
-import learning_management_system.backend.dto.TenantUserLimitDto;
-import learning_management_system.backend.service.TenantBrandingService;
-import learning_management_system.backend.service.TenantPlanService;
+import learning_management_system.backend.dto.UpdateTenantRequest;
 import learning_management_system.backend.service.TenantService;
 
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-/** The caller's own institution. */
+import java.util.UUID;
+
+/** tenant: the caller's own institution (/tenant) and, for platform admins, every institution (/platform/tenants). */
 @RestController
-@RequestMapping("/api/v1/tenant")
+@RequestMapping("/api/v1")
 public class TenantController {
     private final TenantService tenants;
-    private final TenantBrandingService branding;
-    private final TenantPlanService plans;
 
-    public TenantController(TenantService tenants, TenantBrandingService branding, TenantPlanService plans) {
-        this.tenants = tenants;
-        this.branding = branding;
-        this.plans = plans;
-    }
+    public TenantController(TenantService tenants) { this.tenants = tenants; }
 
-    @GetMapping
+    @GetMapping("/tenant")
     public TenantDto current() { return tenants.current(); }
 
-    @GetMapping("/settings")
-    public TenantSettingsDto settings() { return tenants.settings(); }
+    @PostMapping("/platform/tenants")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CreateTenantResponse create(@Valid @RequestBody CreateTenantRequest r) { return tenants.create(r); }
 
-    @GetMapping("/branding")
-    public TenantBrandingDto branding() { return branding.get(); }
+    @GetMapping("/platform/tenants")
+    public PageResponse<TenantDto> list(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "50") int size) {
+        return tenants.list(page, size);
+    }
 
-    @PutMapping("/branding")
-    public TenantBrandingDto replaceBranding(@Valid @RequestBody TenantBrandingDto d) { return branding.replace(d); }
+    @GetMapping("/platform/tenants/{tenantId}")
+    public TenantDto get(@PathVariable UUID tenantId) { return tenants.get(tenantId); }
 
-    @GetMapping("/subscription")
-    public TenantSubscriptionDto subscription() { return plans.subscription(null); }
-
-    @GetMapping("/user-limits")
-    public TenantUserLimitDto userLimits() { return plans.userLimits(null); }
-
-    @PatchMapping("/settings")
-    public TenantSettingsDto updateSettings(@RequestBody TenantSettingsDto d) { return tenants.updateSettings(d); }
+    @PatchMapping("/platform/tenants/{tenantId}")
+    public TenantDto update(@PathVariable UUID tenantId, @RequestBody UpdateTenantRequest r) { return tenants.update(tenantId, r); }
 }

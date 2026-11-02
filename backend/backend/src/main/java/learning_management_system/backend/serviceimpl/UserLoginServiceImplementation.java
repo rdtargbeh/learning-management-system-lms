@@ -11,7 +11,7 @@ import learning_management_system.backend.repository.UserLoginRepository;
 import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.Permissions;
-import learning_management_system.backend.service.AuditService;
+import learning_management_system.backend.service.AuditLogService;
 import learning_management_system.backend.service.UserLoginService;
 import learning_management_system.backend.utility.EntityRefresher;
 
@@ -26,11 +26,11 @@ import java.util.UUID;
 public class UserLoginServiceImplementation implements UserLoginService {
     private final UserLoginRepository logins;
     private final UserRepository users;
-    private final AuditService audit;
+    private final AuditLogService audit;
     private final IdentityMapper identityMapper;
     private final EntityRefresher refresher;
 
-    public UserLoginServiceImplementation(UserLoginRepository logins, UserRepository users, AuditService audit,
+    public UserLoginServiceImplementation(UserLoginRepository logins, UserRepository users, AuditLogService audit,
                                           IdentityMapper identityMapper, EntityRefresher refresher) {
         this.logins = logins;
         this.users = users;

@@ -14,7 +14,7 @@ import learning_management_system.backend.repository.PlatformUserProfileReposito
 import learning_management_system.backend.repository.UserProfileRepository;
 import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.security.RequestContext;
-import learning_management_system.backend.service.TenantPlanService;
+import learning_management_system.backend.service.TenantUserLimitService;
 import learning_management_system.backend.service.UserProvisioningService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,25 +34,25 @@ public class UserProvisioningServiceImplementation implements UserProvisioningSe
     private final PlatformUserProfileRepository platformProfiles;
     private final PasswordEncoder encoder;
     private final UserMapper userMapper;
-    private final TenantPlanService plans;
+    private final TenantUserLimitService userLimits;
 
     public UserProvisioningServiceImplementation(UserRepository users, UserProfileRepository profiles,
                                                  PlatformUserProfileRepository platformProfiles, PasswordEncoder encoder,
-                                                 UserMapper userMapper, TenantPlanService plans) {
+                                                 UserMapper userMapper, TenantUserLimitService userLimits) {
         this.users = users;
         this.profiles = profiles;
         this.platformProfiles = platformProfiles;
         this.encoder = encoder;
         this.userMapper = userMapper;
-        this.plans = plans;
+        this.userLimits = userLimits;
     }
 
     @Override
     public User provisionTenantUser(CreateUserRequest r, UUID tenantId) {
-        plans.requireRoom(tenantId, r.userType());
+        userLimits.requireRoom(tenantId, r.userType());
         User u = newTenantUser(r, tenantId, RequestContext.current().userId());
         users.saveAndFlush(u);
-        plans.refreshCounts(tenantId);
+        userLimits.refreshCounts(tenantId);
         applyProfile(u.getUserId(), r.profile());
         return u;
     }

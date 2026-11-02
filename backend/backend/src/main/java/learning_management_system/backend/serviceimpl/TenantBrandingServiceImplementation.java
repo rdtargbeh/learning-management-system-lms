@@ -13,8 +13,10 @@ import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.security.SystemTx;
 import learning_management_system.backend.service.TenantBrandingService;
+import learning_management_system.backend.service.TenantDomainService;
 
 import org.springframework.stereotype.Service;
+import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -23,9 +25,11 @@ public class TenantBrandingServiceImplementation implements TenantBrandingServic
     private final TenantRepository tenants;
     private final TenantMapper tenantMapper;
     private final SystemTx sys;
+    private final TenantDomainService domains;
 
     public TenantBrandingServiceImplementation(TenantBrandingRepository branding, TenantRepository tenants, TenantMapper tenantMapper,
-                                               SystemTx sys) {
+                                               SystemTx sys, TenantDomainService domains) {
+        this.domains = domains;
         this.branding = branding;
         this.tenants = tenants;
         this.tenantMapper = tenantMapper;
@@ -56,11 +60,21 @@ public class TenantBrandingServiceImplementation implements TenantBrandingServic
     /** Runs in a trusted context: the caller has no tenant yet. Suspended or unknown institutions answer 404. */
     @Override
     public PublicBrandingDto publicBranding(String tenantCode) {
-        return sys.platform(() -> {
-            Tenant t = tenants.findByTenantCodeIgnoreCase(tenantCode.trim())
-                    .filter(x -> x.getTenantStatus() == TenantStatus.ACTIVE && Boolean.TRUE.equals(x.getIsActive()))
-                    .orElseThrow(() -> ApiException.notFound("Institution"));
-            return tenantMapper.toPublicDto(t, branding.findByTenantId(t.getTenantId()).orElse(new TenantBranding()));
-        });
+        return sys.platform(() -> of(tenants.findByTenantCodeIgnoreCase(tenantCode.trim()).orElse(null)));
+    }
+
+    @Override
+    public PublicBrandingDto publicBrandingByDomain(String domainName) {
+        UUID tenantId = domains.tenantForDomain(domainName);
+        if (tenantId == null) throw ApiException.notFound("Institution");
+        return sys.platform(() -> of(tenants.findById(tenantId).orElse(null)));
+    }
+
+    /** Suspended or unknown institutions answer 404. */
+    private PublicBrandingDto of(Tenant t) {
+        if (t == null || t.getTenantStatus() != TenantStatus.ACTIVE || !Boolean.TRUE.equals(t.getIsActive())) {
+            throw ApiException.notFound("Institution");
+        }
+        return tenantMapper.toPublicDto(t, branding.findByTenantId(t.getTenantId()).orElse(new TenantBranding()));
     }
 }

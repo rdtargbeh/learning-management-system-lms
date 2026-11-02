@@ -15,7 +15,7 @@ import learning_management_system.backend.dto.UserRoleDto;
 import learning_management_system.backend.dto.UserSummaryDto;
 import learning_management_system.backend.enums.AccountStatus;
 import learning_management_system.backend.enums.UserType;
-import learning_management_system.backend.service.ObserverService;
+import learning_management_system.backend.service.ObserverStudentLinkService;
 import learning_management_system.backend.service.RoleService;
 import learning_management_system.backend.service.UserService;
 
@@ -31,14 +31,8 @@ import java.util.UUID;
 @RequestMapping("/api/v1/users")
 public class UserController {
     private final UserService users;
-    private final RoleService roles;
-    private final ObserverService observers;
 
-    public UserController(UserService users, RoleService roles, ObserverService observers) {
-        this.users = users;
-        this.roles = roles;
-        this.observers = observers;
-    }
+    public UserController(UserService users) { this.users = users; }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -72,39 +66,4 @@ public class UserController {
     @PutMapping("/{userId}/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void setPassword(@PathVariable UUID userId, @Valid @RequestBody SetPasswordRequest r) { users.setPassword(userId, r); }
-
-    @PatchMapping("/{userId}/profile")
-    public UserProfileDto updateProfile(@PathVariable UUID userId, @RequestBody UserProfileDto d) { return users.updateProfile(userId, d); }
-
-    @PatchMapping("/{userId}/student-profile")
-    public StudentProfileDto updateStudent(@PathVariable UUID userId, @RequestBody StudentProfileDto d) {
-        return users.updateStudentProfile(userId, d);
-    }
-
-    @PatchMapping("/{userId}/employee-profile")
-    public EmployeeProfileDto updateEmployee(@PathVariable UUID userId, @RequestBody EmployeeProfileDto d) {
-        return users.updateEmployeeProfile(userId, d);
-    }
-
-    @PatchMapping("/{userId}/advisor-profile")
-    public AcademicAdvisorProfileDto updateAdvisor(@PathVariable UUID userId, @RequestBody AcademicAdvisorProfileDto d) {
-        return users.updateAdvisorProfile(userId, d);
-    }
-
-    @GetMapping("/{userId}/roles")
-    public List<UserRoleDto> userRoles(@PathVariable UUID userId) { return roles.userRoles(userId); }
-
-    @PostMapping("/{userId}/roles")
-    @ResponseStatus(HttpStatus.CREATED)
-    public UserRoleDto assignRole(@PathVariable UUID userId, @Valid @RequestBody AssignRoleRequest r) { return roles.assign(userId, r); }
-
-    @DeleteMapping("/{userId}/roles/{userRoleId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void unassignRole(@PathVariable UUID userId, @PathVariable UUID userRoleId) { roles.unassign(userId, userRoleId); }
-
-    @GetMapping("/{userId}/observers")
-    public List<ObserverStudentLinkDto> observersOf(@PathVariable UUID userId) { return observers.forStudent(userId); }
-
-    @GetMapping("/{userId}/observing")
-    public List<ObserverStudentLinkDto> observing(@PathVariable UUID userId) { return observers.forObserver(userId); }
 }

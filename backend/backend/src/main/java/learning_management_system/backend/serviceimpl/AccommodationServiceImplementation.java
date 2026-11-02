@@ -22,7 +22,7 @@ import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
 import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.service.AccommodationService;
-import learning_management_system.backend.service.AuditService;
+import learning_management_system.backend.service.AuditLogService;
 import learning_management_system.backend.service.UserService;
 import learning_management_system.backend.utility.EntityRefresher;
 
@@ -44,13 +44,13 @@ public class AccommodationServiceImplementation implements AccommodationService 
     private final CourseRepository courses;
     private final EnrollmentRepository enrollments;
     private final UserService userService;
-    private final AuditService audit;
+    private final AuditLogService audit;
     private final CourseAccess access;
     private final IdentityMapper identityMapper;
     private final EntityRefresher refresher;
 
     public AccommodationServiceImplementation(AccommodationRepository accommodations, UserRepository users, CourseRepository courses,
-                                              EnrollmentRepository enrollments, UserService userService, AuditService audit,
+                                              EnrollmentRepository enrollments, UserService userService, AuditLogService audit,
                                               CourseAccess access, IdentityMapper identityMapper, EntityRefresher refresher) {
         this.accommodations = accommodations;
         this.users = users;

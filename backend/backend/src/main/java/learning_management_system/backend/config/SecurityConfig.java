@@ -3,7 +3,7 @@ package learning_management_system.backend.config;
 import learning_management_system.backend.security.RequestContextFilter;
 import learning_management_system.backend.security.SecurityProperties;
 import learning_management_system.backend.security.TokenService;
-import learning_management_system.backend.service.SessionService;
+import learning_management_system.backend.service.UserSessionService;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -33,7 +33,7 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectProvider<SessionService> sessions) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectProvider<UserSessionService> sessions) throws Exception {
         http
             .csrf(csrf -> csrf.disable())                       // stateless bearer-token API
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))

@@ -13,8 +13,8 @@ import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.service.AccountLockService;
-import learning_management_system.backend.service.AuditService;
-import learning_management_system.backend.service.SessionService;
+import learning_management_system.backend.service.AuditLogService;
+import learning_management_system.backend.service.UserSessionService;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,12 +30,12 @@ public class AccountLockServiceImplementation implements AccountLockService {
 
     private final AccountLockRepository locks;
     private final UserRepository users;
-    private final SessionService sessions;
-    private final AuditService audit;
+    private final UserSessionService sessions;
+    private final AuditLogService audit;
     private final IdentityMapper identityMapper;
 
-    public AccountLockServiceImplementation(AccountLockRepository locks, UserRepository users, SessionService sessions,
-                                            AuditService audit, IdentityMapper identityMapper) {
+    public AccountLockServiceImplementation(AccountLockRepository locks, UserRepository users, UserSessionService sessions,
+                                            AuditLogService audit, IdentityMapper identityMapper) {
         this.locks = locks;
         this.users = users;
         this.sessions = sessions;

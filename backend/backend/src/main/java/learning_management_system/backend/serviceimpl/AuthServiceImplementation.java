@@ -1,13 +1,11 @@
 package learning_management_system.backend.serviceimpl;
 
 import learning_management_system.backend.dto.ChangePasswordRequest;
-import learning_management_system.backend.dto.LoginHistoryDto;
 import learning_management_system.backend.dto.LoginRequest;
 import learning_management_system.backend.dto.LoginResponse;
 import learning_management_system.backend.dto.MfaVerifyRequest;
 import learning_management_system.backend.dto.PageResponse;
 import learning_management_system.backend.dto.UserDetailDto;
-import learning_management_system.backend.entity.LoginHistory;
 import learning_management_system.backend.entity.PlatformUserProfile;
 import learning_management_system.backend.entity.Tenant;
 import learning_management_system.backend.entity.User;
@@ -19,7 +17,7 @@ import learning_management_system.backend.enums.TenantStatus;
 import learning_management_system.backend.enums.UserType;
 import learning_management_system.backend.exception.ApiException;
 import learning_management_system.backend.mapper.IdentityMapper;
-import learning_management_system.backend.repository.LoginHistoryRepository;
+import learning_management_system.backend.service.LoginHistoryService;
 import learning_management_system.backend.repository.PlatformUserProfileRepository;
 import learning_management_system.backend.repository.TenantRepository;
 import learning_management_system.backend.repository.TenantSettingsRepository;
@@ -30,10 +28,10 @@ import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.security.SystemTx;
 import learning_management_system.backend.security.TokenService;
 import learning_management_system.backend.service.AccountLockService;
-import learning_management_system.backend.service.AuditService;
+import learning_management_system.backend.service.AuditLogService;
 import learning_management_system.backend.service.AuthService;
-import learning_management_system.backend.service.MfaService;
-import learning_management_system.backend.service.SessionService;
+import learning_management_system.backend.service.MfaConfigurationService;
+import learning_management_system.backend.service.UserSessionService;
 import learning_management_system.backend.service.UserService;
 
 import org.springframework.data.domain.PageRequest;
@@ -61,28 +59,28 @@ public class AuthServiceImplementation implements AuthService {
     private final TenantSettingsRepository tenantSettings;
     private final UserLoginRepository userLogins;
     private final PlatformUserProfileRepository platformProfiles;
-    private final LoginHistoryRepository loginHistory;
+    private final LoginHistoryService history;
     private final PasswordEncoder encoder;
     private final TokenService tokens;
     private final UserService userService;
-    private final SessionService sessions;
-    private final MfaService mfa;
+    private final UserSessionService sessions;
+    private final MfaConfigurationService mfa;
     private final AccountLockService locks;
-    private final AuditService audit;
+    private final AuditLogService audit;
     private final IdentityMapper identityMapper;
 
     public AuthServiceImplementation(SystemTx sys, UserRepository users, TenantRepository tenants, TenantSettingsRepository tenantSettings,
                                      UserLoginRepository userLogins, PlatformUserProfileRepository platformProfiles,
-                                     LoginHistoryRepository loginHistory, PasswordEncoder encoder, TokenService tokens,
-                                     UserService userService, SessionService sessions, MfaService mfa, AccountLockService locks,
-                                     AuditService audit, IdentityMapper identityMapper) {
+                                     LoginHistoryService history, PasswordEncoder encoder, TokenService tokens,
+                                     UserService userService, UserSessionService sessions, MfaConfigurationService mfa, AccountLockService locks,
+                                     AuditLogService audit, IdentityMapper identityMapper) {
         this.sys = sys;
         this.users = users;
         this.tenants = tenants;
         this.tenantSettings = tenantSettings;
         this.userLogins = userLogins;
         this.platformProfiles = platformProfiles;
-        this.loginHistory = loginHistory;
+        this.history = history;
         this.encoder = encoder;
         this.tokens = tokens;
         this.userService = userService;
@@ -118,14 +116,14 @@ public class AuthServiceImplementation implements AuthService {
                     .orElse(null));
         }
         if (user == null) {
-            record(null, tenantId, login, ip, LoginStatus.FAILED, "unknown login", false);
+            history.record(null, tenantId, login, ip, LoginStatus.FAILED, "unknown login", false);
             throw ApiException.unauthorized("Invalid credentials");
         }
         final UUID userId = user.getUserId();
         requireMaySignIn(user, tenantId, login, ip);
         if (user.getPasswordHash() == null || !encoder.matches(r.password(), user.getPasswordHash())) {
             onFailure(userId, tenantId, ip);
-            record(userId, tenantId, login, ip, LoginStatus.FAILED, "bad password", false);
+            history.record(userId, tenantId, login, ip, LoginStatus.FAILED, "bad password", false);
             throw ApiException.unauthorized("Invalid credentials");
         }
         if (inUserScope(tenantId, () -> mfa.isEnabled(userId))) {
@@ -134,7 +132,7 @@ public class AuthServiceImplementation implements AuthService {
                 u.setFailedLoginAttempts(0);
                 return users.save(u);
             });
-            record(userId, tenantId, login, ip, LoginStatus.MFA_REQUIRED, null, false);
+            history.record(userId, tenantId, login, ip, LoginStatus.MFA_REQUIRED, null, false);
             return new LoginResponse(null, null, tokens.mfaPendingSeconds(), null, null, null, null, List.of(), null, null,
                     true, tokens.issueMfaPending(userId, tenantId), false);
         }
@@ -154,7 +152,7 @@ public class AuthServiceImplementation implements AuthService {
         if (user == null) throw ApiException.unauthorized("Sign in again");
         requireMaySignIn(user, tenantId, user.getUsername(), ip);
         if (!inUserScope(tenantId, () -> mfa.verifyLoginCode(userId, r.code()))) {
-            record(userId, tenantId, user.getUsername(), ip, LoginStatus.FAILED, "bad MFA code", true);
+            history.record(userId, tenantId, user.getUsername(), ip, LoginStatus.FAILED, "bad MFA code", true);
             throw ApiException.unauthorized("The code is not correct");
         }
         return complete(userId, tenantId, user.getUsername(), ip, userAgent, true);
@@ -164,16 +162,16 @@ public class AuthServiceImplementation implements AuthService {
     private void requireMaySignIn(User user, UUID tenantId, String login, InetAddress ip) {
         UUID userId = user.getUserId();
         if (user.getAccountLockedUntil() != null && user.getAccountLockedUntil().isAfter(OffsetDateTime.now())) {
-            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "account locked", false);
+            history.record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "account locked", false);
             throw new ApiException(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "Account is temporarily locked; try again later");
         }
         if (user.getAccountStatus() == AccountStatus.LOCKED && inUserScope(tenantId, () -> locks.stillLocked(userId))) {
-            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "locked by an administrator", false);
+            history.record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "locked by an administrator", false);
             throw new ApiException(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "Account is locked; contact your administrator");
         }
         User fresh = inUserScope(tenantId, () -> users.findById(userId).orElseThrow());
         if (fresh.getAccountStatus() != AccountStatus.ACTIVE) {
-            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "status " + fresh.getAccountStatus(), false);
+            history.record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "status " + fresh.getAccountStatus(), false);
             throw ApiException.unauthorized("Account is not active");
         }
     }
@@ -192,7 +190,7 @@ public class AuthServiceImplementation implements AuthService {
             boolean setupRequired = !mfaOn && (Boolean.TRUE.equals(u.getMfaRequired()) || tenantRequires);
             return sessions.start(u, tenantId, ip, userAgent, setupRequired);
         });
-        record(userId, tenantId, login, ip, LoginStatus.SUCCESS, null, mfaUsed);
+        history.record(userId, tenantId, login, ip, LoginStatus.SUCCESS, null, mfaUsed);
         return resp;
     }
 
@@ -214,20 +212,6 @@ public class AuthServiceImplementation implements AuthService {
         });
     }
 
-    private void record(UUID userId, UUID tenantId, String login, InetAddress ip, LoginStatus status, String reason, boolean mfaUsed) {
-        inUserScope(tenantId, () -> {
-            LoginHistory h = new LoginHistory();
-            h.setUserId(userId);
-            h.setTenantId(tenantId);
-            h.setUsername(login.length() > 100 ? login.substring(0, 100) : login);
-            h.setIpAddress(ip);
-            h.setLoginStatus(status);
-            h.setLoginMethod(LoginMethod.PASSWORD);
-            h.setFailureReason(reason);
-            h.setMfaUsed(mfaUsed);
-            return loginHistory.save(h);
-        });
-    }
 
     private <T> T inUserScope(UUID tenantId, Supplier<T> work) {
         return tenantId == null ? sys.platform(work) : sys.inTenant(tenantId, work);
@@ -261,13 +245,6 @@ public class AuthServiceImplementation implements AuthService {
         audit.record("PASSWORD_CHANGED", "USER", me, me, Severity.INFO, null, null);
     }
 
-    @Transactional(readOnly = true)
-    @Override
-    public PageResponse<LoginHistoryDto> loginHistory(UUID userId, int page, int size) {
-        if (!Access.isSelf(userId)) Access.requireTenantPermission(Permissions.USER_READ);
-        return PageResponse.of(loginHistory.findByUserIdOrderByLoginTimestampDesc(userId, PageRequest.of(page, Math.min(size, 200))),
-                identityMapper::toDto);
-    }
 
     // ---------------------------------------------------------------- support sessions
 

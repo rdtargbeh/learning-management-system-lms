@@ -14,4 +14,7 @@ public interface TenantBrandingService {
 
     /** For the sign-in page, without signing in: branding of an active institution by its code. */
     PublicBrandingDto publicBranding(String tenantCode);
+
+    /** The same, found by one of the institution's verified domains (for sign-in pages on the institution's own domain). */
+    PublicBrandingDto publicBrandingByDomain(String domainName);
 }

@@ -6,8 +6,10 @@ Spring Boot 3.4 / Java 21 backend for the multi-tenant Learning Management Syste
 ## What's in here
 
 The code is organised by layer. Every layer is one flat package under `learning_management_system.backend`, so a
-domain's classes are found by name (`Course`, `CourseDto`, `CourseMapper`, `CourseRepository`, `CourseService`,
-`CourseServiceImplementation`, `CourseController`).
+table's classes are found by name (`Course`, `CourseDto`, `CourseMapper`, `CourseRepository`, `CourseService`,
+`CourseServiceImplementation`, `CourseController`). Each implemented table has its own service, implementation and
+controller (domains 01 and 02 completely). The only services without a table of their own are helpers: `AuthService`
+(the sign-in flow), `UserProvisioningService` (account creation) and `MailService`.
 
 | Package | Contents |
 |---|---|
@@ -22,10 +24,10 @@ domain's classes are found by name (`Course`, `CourseDto`, `CourseMapper`, `Cour
 | `security/` | JWT tokens, request context, permission checks, tenant stamping of new rows, trusted system transactions. |
 | `config/` | Spring configuration: security, row-level-security transaction manager, MapStruct settings, first-start bootstrap. |
 | `exception/` | `ApiException` and the global error handler. |
-| `utility/` | Small helpers: `Patch`, `Tokens` (random tokens, SHA-256), `Totp` (RFC 6238 authenticator codes), `SecretCipher` (AES-GCM for stored MFA secrets). |
+| `utility/` | Small helpers: `Patch`, `ClientInfo` (IP, user agent), `DnsTxtResolver` (domain verification), `Tokens` (random tokens, SHA-256), `Totp` (RFC 6238 authenticator codes), `SecretCipher` (AES-GCM for stored MFA secrets). |
 | `specification/` | JPA Specifications for dynamic search filters (`AuditLogSpecification`). |
 | `src/main/resources/db/schema/` | The database schema: one SQL file per domain, plus `run_all.sql`. This is the source of truth. |
-| `scripts/` | `gen_entities.py` (regenerates entities, repositories and enums), `catalog.sql`, `api_smoke_test.py` (61 identity/tenancy checks), `api_test_courses.py` (184 course/enrollment checks), `api_test_content.py` (145 content/module checks), `api_test_assignments.py` (194 assignment checks), `api_test_identity.py` (190 checks: branding, plan limits, sessions, MFA, password reset, locks, audit log, settings, accommodations). Run them in that order on a fresh database; the last one reads mailed tokens from the app log (`LMS_APP_LOG`). |
+| `scripts/` | `gen_entities.py` (regenerates entities, repositories and enums), `catalog.sql`, `api_smoke_test.py` (61 identity/tenancy checks), `api_test_courses.py` (184 course/enrollment checks), `api_test_content.py` (145 content/module checks), `api_test_assignments.py` (194 assignment checks), `api_test_identity.py` (268 checks: branding, plan limits, institution record, domains, sessions, MFA, password reset, locks, audit log, profiles, role permissions, settings, accommodations). Run them in that order on a fresh database; the last one reads mailed tokens from the app log (`LMS_APP_LOG`). |
 
 So far services and controllers exist for **tenancy, identity, academic structure, courses, enrollment, content, modules and assignments**.
 Every table of domains 01 (tenancy) and 02 (identity) is now covered.
@@ -80,17 +82,18 @@ password reset (`/auth/password/forgot|reset`), `/auth/email/verify`, and `GET /
 | Sessions | `GET /auth/sessions` · `DELETE /auth/sessions/{id}` · `GET /auth/login-history` |
 | MFA | `GET /auth/mfa` · `POST /auth/mfa/totp/setup|enable` · `POST /auth/mfa/backup-codes` · `POST /auth/mfa/disable` |
 | Recovery | `POST /auth/password/forgot|reset` · `POST /auth/email/verify/request` · `POST /auth/email/verify` |
-| Account admin | `GET/POST /users/{id}/lock` · `POST /users/{id}/unlock` · `POST /users/{id}/mfa/reset` · `GET/POST /users/{id}/logins` · `DELETE /users/{id}/logins/{loginId}` · `GET /users/{id}/login-history` · `GET /users/{id}/accessibility` |
+| Account admin | `GET/POST /users/{id}/lock` · `POST /users/{id}/unlock` · `POST /users/{id}/mfa/reset` · `GET/POST /users/{id}/logins` · `DELETE /users/{id}/logins/{loginId}` · `GET /users/{id}/login-history` · `GET /users/{id}/accessibility|preferences` |
 | My settings | `GET/PATCH /me/accessibility` · `GET/PATCH /me/preferences` |
 | Accommodations | `GET/POST /users/{id}/accommodations` · `PATCH /accommodations/{id}` · `GET /courses/{id}/accommodations` |
 | Audit log | `GET /audit-log` (filters: `actorUserId`, `affectedUserId`, `actionType`, `resourceType`, `resourceId`, `from`, `to`; `tenantId` for platform admins) |
-| Platform (staff) | `POST/GET /platform/tenants` · `GET/PATCH /platform/tenants/{id}` · `GET/PUT /platform/tenants/{id}/subscription|user-limits` · `POST/GET /platform/users` · `PATCH /platform/users/{id}/platform-profile` |
+| Platform (staff) | `POST/GET /platform/tenants` · `GET/PATCH /platform/tenants/{id}` · `GET/PUT /platform/tenants/{id}/subscription|user-limits` · `GET/PATCH /platform/tenants/{id}/institution` · `GET/POST /platform/tenants/{id}/domains` · `POST .../domains/{domainId}/verify|mark-verified|primary` · `DELETE .../domains/{domainId}` · `GET /platform/users/{id}/platform-profile` · `POST/GET /platform/users` · `PATCH /platform/users/{id}/platform-profile` |
 | Support access | `POST/GET /platform/support-access` · `POST /platform/support-access/{id}/approve|deny|start|end` |
 | Users | `POST/GET /users` (filters: `type`, `status`, `q`, paging) · `GET/PATCH /users/{id}` · `POST /users/{id}/deactivate|reactivate|suspend` · `PUT /users/{id}/password` |
-| Profiles | `PATCH /users/{id}/profile` · `/student-profile` · `/employee-profile` · `/advisor-profile` |
-| Roles | `GET/POST /roles` · `PATCH /roles/{id}` · `GET /permissions` · `GET/POST /users/{id}/roles` · `DELETE /users/{id}/roles/{userRoleId}` |
+| Profiles | `GET/PATCH /users/{id}/profile` · `/student-profile` · `/employee-profile` · `/advisor-profile` |
+| Roles | `GET/POST /roles` · `GET/PATCH /roles/{id}` · `GET/PUT /roles/{id}/permissions` · `GET /permissions` · `GET/POST /users/{id}/roles` · `DELETE /users/{id}/roles/{userRoleId}` |
 | Observers | `POST /observer-links` · `POST /observer-links/{id}/revoke` · `GET /users/{id}/observers` · `GET /users/{id}/observing` |
-| Institution | `GET /tenant` · `GET/PATCH /tenant/settings` · `GET/PUT /tenant/branding` · `GET /tenant/subscription` · `GET /tenant/user-limits` · `GET /public/tenants/{code}/branding` (sign-in page, no token) |
+| Institution | `GET /tenant` · `GET/PATCH /tenant/settings` · `GET/PUT /tenant/branding` · `GET /tenant/subscription` · `GET /tenant/user-limits` · `GET/PATCH /tenant/institution` · `GET/POST /tenant/domains` · `POST /tenant/domains/{id}/verify|primary` · `DELETE /tenant/domains/{id}` |
+| Public (no token) | `GET /public/tenants/{code}/branding` · `GET /public/domains/{domain}/branding` (verified domains only) |
 | Academic structure | `GET/POST /org-units` · `PATCH /org-units/{id}` · `GET/POST /terms` · `GET /terms/current` · `PATCH /terms/{id}` · `GET/POST /course-categories` · `PATCH /course-categories/{id}` |
 | Courses | `POST/GET /courses` (filters: `termId`, `status`, `categoryId`, `orgUnitId`, `q`) · `GET /courses/mine` · `GET/PATCH /courses/{id}` · `POST /courses/{id}/publish|unpublish|conclude|archive|unarchive` · `PUT /courses/{id}/self-enrollment` |
 | Sections | `GET/POST /courses/{id}/sections` · `GET/PATCH /sections/{id}` · `POST /sections/{id}/crosslist|uncrosslist` · `GET/POST /sections/{id}/staff` · `DELETE /sections/{id}/staff/{staffId}` |
@@ -158,6 +161,10 @@ Assignments follow Canvas:
 - **Password reset and email verification:** single-use links (30 minutes and 24 hours), stored as hashes. Forgot
   password always answers 202, so it does not reveal which accounts exist. Mail goes through `MailService`; the
   development sender only logs it.
+- **Domains:** an institution adds its domains; each gets a token to publish as a DNS TXT record
+  (`lms-verification=<token>` on the domain or on `_lms-verification.<domain>`), then asks for verification. Platform
+  admins can add domains as verified or mark them verified. Only verified domains can be primary or find the
+  institution's sign-in branding.
 - **Extra sign-in names:** `user_login` (for example a SIS id) work like a username.
 - **Plan limits:** `tenant_user_limit` (or the plan's maximum) caps active students, instructors and admins.
   Creating or reactivating beyond it gives `409 USER_LIMIT_REACHED`.

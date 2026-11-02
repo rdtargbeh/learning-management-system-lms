@@ -1,4 +1,4 @@
-"""End-to-end test for the rest of tenancy (branding, plan, user limits) and identity (sessions, refresh, sign-out, MFA,
+"""End-to-end test for the rest of tenancy (branding, plan, user limits, institution record, domains) and identity (sessions, refresh, sign-out, MFA,
 password reset, email verification, locks, audit log, accessibility, preferences, accommodations, extra logins).
 
 Needs a running backend whose database has the bootstrap platform owner (owner@lms-company.com / Owner-Pass-2026!)
@@ -273,6 +273,81 @@ pa = call('GET', f'/audit-log?tenantId={TID}&size=5', token=T, expect=200, label
 check(pa['totalItems'] > 5 and all(x['tenantId'] == TID for x in pa['items']), 'platform view filtered by tenant')
 call('GET', f'/users/{s1}/lock', token=X, expect=404, label='other institution cannot see our users')
 
+# ------------------------------------------------------------------ 01: institution record
+call('GET', '/tenant/institution', token=A, expect=404, label='no institution record yet')
+call('PATCH', '/tenant/institution', {'country': 'Ghana'}, token=A, expect=400, label='a new record needs a name')
+ins = call('PATCH', '/tenant/institution', {'institutionName': 'Identity University', 'country': 'Ghana', 'establishedYear': 1961,
+           'institutionType': 'UNIVERSITY', 'websiteUrl': 'https://idf.edu'}, token=A, expect=200, label='admin creates the institution record')
+check(ins['institutionName'] == 'Identity University' and ins['establishedYear'] == 1961 and ins.get('institutionCode') is None, 'institution saved')
+call('PATCH', '/tenant/institution', {'institutionCode': 'IDF-U'}, token=A, expect=403, label='only platform admins change the code')
+call('PATCH', '/tenant/institution', {'establishedYear': 1700}, token=A, expect=400, label='year must be 1800 or later')
+call('PATCH', '/tenant/institution', {'websiteUrl': 'idf.edu'}, token=A, expect=400, label='website must be a URL')
+call('PATCH', f'/platform/tenants/{TID}/institution', {'institutionCode': 'idf-u'}, token=T, expect=200, label='platform sets the code')
+check(call('GET', '/tenant/institution', token=login('IDF', 'stu.four')['accessToken'], expect=200, label='any member reads it')['institutionCode'] == 'IDF-U', 'code stored upper-case')
+XID = tx['tenant']['tenantId']
+call('PATCH', f'/platform/tenants/{XID}/institution', {'institutionName': 'Elsewhere College', 'institutionCode': 'IDF-U'}, token=T, expect=409,
+     label='institution codes are unique')
+call('PATCH', '/tenant/institution', {'country': 'Togo'}, token=ADA, expect=403,
+     label='teacher cannot change it')
+call('GET', f'/platform/tenants/{TID}/institution', token=A, expect=403, label='platform view is for platform admins')
+
+# ------------------------------------------------------------------ 01: domains
+check(call('GET', '/tenant/domains', token=A, expect=200, label='no domains yet') == [], 'empty')
+call('POST', '/tenant/domains', {'domainName': 'not a domain'}, token=A, expect=400, label='invalid domain name')
+d1 = call('POST', '/tenant/domains', {'domainName': 'https://LMS.idf.edu/'}, token=A, expect=201, label='admin adds a domain')
+check(d1['domainName'] == 'lms.idf.edu' and d1['isPrimary'] and not d1['isVerified'] and d1['verificationRecord'].startswith('lms-verification='),
+      'normalised, primary (first), needs a TXT record')
+call('POST', '/tenant/domains', {'domainName': 'lms.idf.edu'}, token=X, expect=409, label='another institution cannot take it')
+call('POST', '/tenant/domains', {'domainName': 'idf-other.edu', 'verified': True}, token=A, expect=403, label='only platform admins add verified domains')
+d2 = call('POST', '/tenant/domains', {'domainName': 'learn.idf.edu'}, token=A, expect=201, label='second domain')
+check(not d2['isPrimary'], 'second is not primary')
+nv = call('POST', f"/tenant/domains/{d2['domainId']}/verify", token=A, expect=409, label='verify fails without the DNS record')
+check(nv.get('code') == 'DOMAIN_NOT_VERIFIED' and 'lms-verification=' in nv.get('message', ''), 'tells which TXT record is missing')
+call('POST', f"/tenant/domains/{d2['domainId']}/primary", token=A, expect=409, label='unverified domain cannot become primary')
+call('POST', f"/platform/tenants/{TID}/domains/{d2['domainId']}/mark-verified", token=A, expect=403, label='institution cannot mark verified')
+mv = call('POST', f"/platform/tenants/{TID}/domains/{d2['domainId']}/mark-verified", token=T, expect=200, label='platform marks it verified')
+check(mv['isVerified'] and mv['dateVerified'] and mv.get('verificationRecord') is None, 'verified')
+call('GET', '/public/domains/lms.idf.edu/branding', expect=404, label='unverified domain does not reveal the institution')
+pbd = call('GET', '/public/domains/LEARN.idf.edu/branding', expect=200, label='sign-in branding by verified domain')
+check(pbd['tenantCode'] == 'IDF' and pbd['primaryColor'] == '#003366', 'branding found by domain')
+call('DELETE', f"/tenant/domains/{d1['domainId']}", token=A, expect=409, label='primary domain cannot be removed while others exist')
+pr2 = call('POST', f"/tenant/domains/{d2['domainId']}/primary", token=A, expect=200, label='make the verified domain primary')
+dl = call('GET', '/tenant/domains', token=A)
+check(pr2['isPrimary'] and [d['domainName'] for d in dl if d['isPrimary']] == ['learn.idf.edu'], 'exactly one primary')
+call('DELETE', f"/tenant/domains/{d1['domainId']}", token=A, expect=204, label='remove the old domain')
+call('DELETE', f"/tenant/domains/{d1['domainId']}", token=X, expect=404, label="other institution cannot see it")
+pd = call('POST', f'/platform/tenants/{XID}/domains', {'domainName': 'elsewhere.edu', 'verified': True}, token=T, expect=201, label='platform adds a verified domain')
+check(pd['isVerified'] and pd['isPrimary'], 'pre-verified primary')
+check(len(call('GET', f'/platform/tenants/{XID}/domains', token=T, expect=200, label='platform lists domains')) == 1, 'listed')
+call('GET', '/tenant/domains', token=login('IDF', 'stu.four')['accessToken'], expect=403, label='students cannot list domains')
+
+# ------------------------------------------------------------------ 02: profiles, roles, preferences (one endpoint set per table)
+S4T = login('IDF', 'stu.four')['accessToken']
+check(call('GET', f'/users/{s4}/profile', token=S4T, expect=200, label='own profile')['firstName'] == 'Four', 'user_profile')
+call('PATCH', f'/users/{s4}/profile', {'preferredName': 'Quattro'}, token=S4T, expect=200, label='edit own profile')
+call('GET', f'/users/{s1}/profile', token=S4T, expect=403, label="another student's profile needs USER_READ")
+call('GET', f'/users/{s4}/student-profile', token=S4T, expect=200, label='own student profile')
+call('PATCH', f'/users/{s4}/student-profile', {'studentNumber': 'S-4'}, token=S4T, expect=403, label='students cannot edit their student record')
+call('GET', f'/users/{ada}/employee-profile', token=A, expect=200, label='employee profile')
+call('GET', f'/users/{s4}/employee-profile', token=A, expect=404, label='students have no employee profile')
+call('GET', f'/users/{ada}/advisor-profile', token=A, expect=404, label='not an advisor')
+call('PATCH', f'/users/{s4}/advisor-profile', {}, token=A, expect=400, label='advisor profile needs an employee profile')
+check(call('GET', f'/users/{s4}', token=A)['profile']['preferredName'] == 'Quattro', 'user detail shows the profile change')
+rl = call('GET', f"/roles/{role['roleId']}", token=A, expect=200, label='one role')
+check(rl['permissions'] == ['AUDIT_READ'], 'role permissions in the role')
+rp = call('PUT', f"/roles/{role['roleId']}/permissions", {'permissions': ['AUDIT_READ', 'USER_READ']}, token=A, expect=200, label='replace role permissions')
+check(sorted(p['permissionCode'] for p in rp) == ['AUDIT_READ', 'USER_READ'], 'role_permissions replaced')
+call('PUT', f"/roles/{role['roleId']}/permissions", {'permissions': ['NOT_A_PERMISSION']}, token=A, expect=400, label='unknown permission code')
+call('PUT', f"/roles/{role['roleId']}/permissions", {'permissions': []}, token=ADA, expect=403, label='teacher cannot change roles')
+check(len(call('GET', f"/roles/{role['roleId']}/permissions", token=A, expect=200, label='list role permissions')) == 2, 'two permissions')
+check(any(r['roleId'] == role['roleId'] for r in call('GET', f'/users/{fay}/roles', token=A, expect=200, label="user's roles")), 'user_role listed')
+check(len(call('GET', '/permissions', token=A, expect=200, label='permission catalogue')) > 10, 'permissions listed')
+check(call('GET', f'/users/{s1}/preferences', token=A, expect=200, label="admin reads a user's preferences")['themePreference'] == 'DARK', 'preferences view')
+call('GET', f'/users/{s1}/preferences', token=S4T, expect=403, label="students cannot read others' preferences")
+au2 = call('GET', '/audit-log?resourceType=TENANT_DOMAIN&size=50', token=A, expect=200, label='domain changes are audited')
+check({'DOMAIN_ADDED', 'DOMAIN_MADE_PRIMARY', 'DOMAIN_REMOVED'} <= {x['actionType'] for x in au2['items']}, 'domain audit trail')
+check(any(x['actionType'] == 'ROLE_PERMISSIONS_CHANGED' for x in call('GET', '/audit-log?resourceType=ROLE&size=50', token=A)['items']), 'role permission change audited')
+
 # ------------------------------------------------------------------ platform owner: MFA is required
 osec = call('POST', '/auth/mfa/totp/setup', token=T, expect=200, label='owner sets up MFA')['secret']
 call('POST', '/auth/mfa/totp/enable', {'code': totp(osec)}, token=T, expect=200, label='owner turns MFA on')
@@ -281,6 +356,8 @@ op = call('POST', '/auth/login', {'login': 'owner@lms-company.com', 'password': 
 check(op['mfaRequired'] and op.get('accessToken') is None, 'owner now needs a code')
 ov = call('POST', '/auth/mfa/verify', {'mfaToken': op['mfaToken'], 'code': totp(osec)}, expect=200, label='owner signs in with a code')
 check(ov['mfaSetupRequired'] is False, 'setup no longer required')
+pp = call('GET', f"/platform/users/{ov['user']['userId']}/platform-profile", token=ov['accessToken'], expect=200, label='own platform profile')
+check(pp['platformRole'] == 'SUPER_ADMIN', 'platform_user_profile')
 call('POST', f"/users/{ov['user']['userId']}/mfa/reset", token=ov['accessToken'], expect=204, label='(reset owner MFA so the database stays usable for other tests)')
 
 passed = sum(1 for r in results if r[0])

@@ -30,10 +30,7 @@ public interface AuthService {
     /** Changes the caller's password and ends their other sessions. */
     void changeOwnPassword(ChangePasswordRequest r);
 
-    /** Sign-in attempts of a user (own, or USER_READ). */
-    PageResponse<LoginHistoryDto> loginHistory(UUID userId, int page, int size);
-
-    /** Builds a tenant-scoped token for an active support-access session (used by PlatformService). */
+    /** Builds a tenant-scoped token for an active support-access session (used by PlatformSupportAccessService). */
     String supportToken(UUID platformUserId, UUID tenantId, UUID supportAccessId);
 
     long ttlSeconds();
