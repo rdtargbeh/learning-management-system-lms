@@ -3,6 +3,8 @@ package learning_management_system.backend.config;
 import learning_management_system.backend.security.RequestContextFilter;
 import learning_management_system.backend.security.SecurityProperties;
 import learning_management_system.backend.security.TokenService;
+import learning_management_system.backend.service.SessionService;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,17 +33,19 @@ import java.util.List;
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, ObjectProvider<SessionService> sessions) throws Exception {
         http
             .csrf(csrf -> csrf.disable())                       // stateless bearer-token API
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/mfa/verify",
+                        "/api/v1/auth/password/forgot", "/api/v1/auth/password/reset", "/api/v1/auth/email/verify").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                 .requestMatchers("/error").permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(rs -> rs.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
             .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-            .addFilterAfter(new RequestContextFilter(), BearerTokenAuthenticationFilter.class);
+            .addFilterAfter(new RequestContextFilter(sid -> sessions.getObject().isActive(sid)), BearerTokenAuthenticationFilter.class);
         return http.build();
     }
 

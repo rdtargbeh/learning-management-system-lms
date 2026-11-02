@@ -1,6 +1,10 @@
 package learning_management_system.backend.security;
 
 import learning_management_system.backend.exception.ApiException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+
+import java.util.UUID;
 
 /** Authorization checks shared by services (the database separately enforces tenant isolation). */
 public final class Access {
@@ -35,7 +39,17 @@ public final class Access {
         return false;
     }
 
-    public static boolean isSelf(java.util.UUID userId) {
+    /** The user_session of the current access token, or null (support sessions, internal work). */
+    public static UUID currentSessionId() {
+        if (SecurityContextHolder.getContext().getAuthentication()
+                instanceof JwtAuthenticationToken t) {
+            String sid = t.getToken().getClaimAsString(TokenService.CLAIM_SESSION);
+            return sid == null ? null : UUID.fromString(sid);
+        }
+        return null;
+    }
+
+    public static boolean isSelf(UUID userId) {
         return userId != null && userId.equals(ctx().userId());
     }
 }

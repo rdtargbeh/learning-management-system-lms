@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByTenantIdIsNullAndUsernameIgnoreCase(String username);
     Optional<User> findByTenantIdIsNullAndEmail(String email);
     boolean existsByIsSystemUserTrue();
+
+    /** Accounts of these types in the tenant that are not deactivated or deleted (for user limits). */
+    long countByTenantIdAndUserTypeInAndAccountStatusNotIn(UUID tenantId, Collection<UserType> types,
+                                                           Collection<AccountStatus> statuses);
     List<User> findByIsSystemUserTrueOrderByUsername();
 
     /** Tenant user search; RLS already restricts rows to the caller's tenant. */

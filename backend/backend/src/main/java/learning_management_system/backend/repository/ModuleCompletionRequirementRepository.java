@@ -21,6 +21,13 @@ public interface ModuleCompletionRequirementRepository extends JpaRepository<Mod
 
     Optional<ModuleCompletionRequirement> findByModuleIdAndContentId(UUID moduleId, UUID contentId);
 
+    Optional<ModuleCompletionRequirement> findByModuleIdAndAssignmentId(UUID moduleId, UUID assignmentId);
+
+    /** An assignment leaving a module takes its requirement with it. */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from ModuleCompletionRequirement r where r.assignmentId = :assignmentId and (:keepModuleId is null or r.moduleId <> :keepModuleId)")
+    int deleteForAssignmentOutsideModule(@Param("assignmentId") UUID assignmentId, @Param("keepModuleId") UUID keepModuleId);
+
     /** A content item leaving a module takes its requirement with it. */
     @Modifying(flushAutomatically = true)
     @Query("delete from ModuleCompletionRequirement r where r.contentId = :contentId and r.moduleId <> :keepModuleId")

@@ -26,6 +26,9 @@ import java.util.UUID;
 public class CourseAccess {
     public static final Set<CourseInstructorRole> TEACHER_ROLES = EnumSet.of(CourseInstructorRole.PRIMARY, CourseInstructorRole.CO_INSTRUCTOR);
     public static final Set<CourseInstructorRole> STAFF_ROLES = EnumSet.allOf(CourseInstructorRole.class);
+    /** Staff who may grade: everyone but REVIEWER. */
+    public static final Set<CourseInstructorRole> GRADER_ROLES = EnumSet.of(CourseInstructorRole.PRIMARY, CourseInstructorRole.CO_INSTRUCTOR,
+            CourseInstructorRole.TEACHING_ASSISTANT, CourseInstructorRole.GRADER);
 
     private final CourseInstructorRepository staff;
     private final EnrollmentRepository enrollments;
@@ -73,6 +76,13 @@ public class CourseAccess {
         Access.requireTenant();
         if (canSeeEverything() || isSectionStaff(s.getSectionId())) return;
         throw ApiException.forbidden("Only course staff can see the roster");
+    }
+
+    /** COURSE_MANAGE, or a teacher, TA or grader of the course. */
+    public void requireGrader(UUID courseId) {
+        Access.requireTenant();
+        if (Access.hasTenantPermission(Permissions.COURSE_MANAGE) || staff.isStaffInCourse(courseId, me(), GRADER_ROLES)) return;
+        throw ApiException.forbidden("Only the course's teachers, TAs and graders can grade");
     }
 
     /** COURSE_MANAGE only (structure changes such as sections, staff, cross-listing, archiving). */

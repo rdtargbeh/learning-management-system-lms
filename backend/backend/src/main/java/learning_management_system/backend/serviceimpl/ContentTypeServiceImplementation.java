@@ -39,7 +39,8 @@ public class ContentTypeServiceImplementation implements ContentTypeService {
     private final ContentMapper contentMapper;
     private final EntityRefresher refresher;
 
-    public ContentTypeServiceImplementation(ContentTypeRepository types, ContentMapper contentMapper, EntityRefresher refresher) {
+    public ContentTypeServiceImplementation(ContentTypeRepository types, ContentMapper contentMapper,
+                                            EntityRefresher refresher) {
         this.types = types;
         this.contentMapper = contentMapper;
         this.refresher = refresher;

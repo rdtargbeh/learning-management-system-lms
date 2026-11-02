@@ -14,6 +14,8 @@ public final class Permissions {
     public static final String COURSE_READ = "COURSE_READ";
     public static final String COURSE_MANAGE = "COURSE_MANAGE";
     public static final String ENROLLMENT_MANAGE = "ENROLLMENT_MANAGE";
+    public static final String AUDIT_READ = "AUDIT_READ";
+    public static final String ACCOMMODATION_MANAGE = "ACCOMMODATION_MANAGE";
 
     public record Def(String code, String name, String resource, String action) {}
 
@@ -26,5 +28,7 @@ public final class Permissions {
             new Def(ACADEMIC_STRUCTURE_MANAGE, "Manage org units, academic terms and course categories", "ACADEMIC", "UPDATE"),
             new Def(COURSE_READ, "View every course and section", "COURSE", "READ"),
             new Def(COURSE_MANAGE, "Create and edit courses, sections and course staff", "COURSE", "UPDATE"),
-            new Def(ENROLLMENT_MANAGE, "Enroll, withdraw and waitlist users in any section", "ENROLLMENT", "UPDATE"));
+            new Def(ENROLLMENT_MANAGE, "Enroll, withdraw and waitlist users in any section", "ENROLLMENT", "UPDATE"),
+            new Def(AUDIT_READ, "Read the institution's audit log", "AUDIT", "READ"),
+            new Def(ACCOMMODATION_MANAGE, "Approve and manage student accommodations", "ACCOMMODATION", "UPDATE"));
 }

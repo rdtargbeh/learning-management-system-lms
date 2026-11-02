@@ -190,7 +190,14 @@ HANDWRITTEN_REPOS = {'users', 'user_profile', 'platform_user_profile', 'student_
                      'enrollment', 'waitlist', 'group_set', 'student_group', 'group_members',
                      # content + modules
                      'content_type', 'content', 'video_lecture', 'course_module', 'module_prerequisite',
-                     'module_completion_requirement', 'student_module_progress', 'student_content_progress'}
+                     'module_completion_requirement', 'student_module_progress', 'student_content_progress',
+                     # assignments
+                     'assignment', 'assignment_submission', 'feedback', 'assignment_override', 'assignment_peer_review',
+                     'comment_library_item',
+                     # tenancy + identity, complete
+                     'tenant_branding', 'tenant_subscription', 'tenant_user_limit', 'user_session', 'login_history',
+                     'password_reset_token', 'mfa_configuration', 'email_verification_token', 'account_lock', 'audit_log',
+                     'user_accessibility_settings', 'user_preferences', 'accommodation', 'user_login'}
 import json as _json
 for d in ('entity', 'repository', 'enums'): os.makedirs(f'{OUT}/{d}', exist_ok=True)
 n = e = 0

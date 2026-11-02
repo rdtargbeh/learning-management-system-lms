@@ -16,6 +16,7 @@ import learning_management_system.backend.enums.EditingRoles;
 import learning_management_system.backend.enums.StudentContentProgressStatus;
 import learning_management_system.backend.exception.ApiException;
 import learning_management_system.backend.mapper.ContentMapper;
+import learning_management_system.backend.repository.AssignmentRepository;
 import learning_management_system.backend.repository.ContentRepository;
 import learning_management_system.backend.repository.ContentTypeRepository;
 import learning_management_system.backend.repository.CourseModuleRepository;
@@ -45,6 +46,7 @@ import java.util.UUID;
 @Service
 public class ContentServiceImplementation implements ContentService {
     private final ContentRepository contents;
+    private final AssignmentRepository assignments;
     private final ContentTypeRepository types;
     private final VideoLectureRepository videos;
     private final CourseRepository courses;
@@ -57,13 +59,15 @@ public class ContentServiceImplementation implements ContentService {
     private final ContentMapper contentMapper;
     private final EntityRefresher refresher;
 
-    public ContentServiceImplementation(ContentRepository contents, ContentTypeRepository types, VideoLectureRepository videos,
+    public ContentServiceImplementation(ContentRepository contents, AssignmentRepository assignments,
+                                        ContentTypeRepository types, VideoLectureRepository videos,
                                         CourseRepository courses, CourseModuleRepository modules,
                                         ModuleCompletionRequirementRepository requirements,
                                         StudentContentProgressRepository contentProgress, ContentTypeService typeService,
                                         ModuleProgressService progress, CourseAccess access, ContentMapper contentMapper,
                                         EntityRefresher refresher) {
         this.contents = contents;
+        this.assignments = assignments;
         this.types = types;
         this.videos = videos;
         this.courses = courses;
@@ -140,7 +144,7 @@ public class ContentServiceImplementation implements ContentService {
         x.setIsPublished(false);
         if (r.moduleId() != null) {
             module(r.moduleId(), courseId);
-            x.setDisplayOrder(contents.maxDisplayOrderInModule(r.moduleId()) + 1);
+            x.setDisplayOrder(nextOrder(r.moduleId()));
         }
         refresher.refresh(contents.saveAndFlush(x));
         if (r.video() != null) saveVideo(x, r.video());
@@ -208,7 +212,7 @@ public class ContentServiceImplementation implements ContentService {
             if (!r.moduleId().equals(x.getModuleId())) {
                 requirements.deleteForContentOutsideModule(contentId, r.moduleId());
                 x.setModuleId(r.moduleId());
-                x.setDisplayOrder(contents.maxDisplayOrderInModule(r.moduleId()) + 1);
+                x.setDisplayOrder(nextOrder(r.moduleId()));
             }
         }
         return fullDto(contents.saveAndFlush(x));
@@ -267,7 +271,7 @@ public class ContentServiceImplementation implements ContentService {
         if (x.getDateEnd() != null && today.isAfter(x.getDateEnd())) return "Closed on " + x.getDateEnd();
         if (x.getModuleId() == null) return null;
         ModuleState s = states.get(x.getModuleId());
-        return s == null ? "Not available" : s.lockedContent().get(x.getContentId());
+        return s == null ? "Not available" : s.lockedItems().get(x.getContentId());
     }
 
     private void makeFrontPage(Content x) {
@@ -293,6 +297,11 @@ public class ContentServiceImplementation implements ContentService {
             contentMapper.updateEntity(d, v);
         }
         videos.saveAndFlush(v);
+    }
+
+    /** Content and assignments share one order inside a module: new items go after both. */
+    private int nextOrder(UUID moduleId) {
+        return Math.max(contents.maxDisplayOrderInModule(moduleId), assignments.maxDisplayOrderInModule(moduleId)) + 1;
     }
 
     private ContentDto fullDto(Content x) {

@@ -10,15 +10,18 @@ import learning_management_system.backend.dto.ModuleStudentProgressDto;
 import learning_management_system.backend.dto.ModuleViewDto;
 import learning_management_system.backend.dto.ReorderRequest;
 import learning_management_system.backend.dto.UpdateCourseModuleRequest;
+import learning_management_system.backend.entity.Assignment;
 import learning_management_system.backend.entity.Content;
 import learning_management_system.backend.entity.ContentType;
 import learning_management_system.backend.entity.Course;
 import learning_management_system.backend.entity.CourseModule;
 import learning_management_system.backend.entity.ModuleCompletionRequirement;
 import learning_management_system.backend.entity.ModulePrerequisite;
+import learning_management_system.backend.enums.AssignmentStatus;
 import learning_management_system.backend.enums.ModuleCompletionRequirementType;
 import learning_management_system.backend.exception.ApiException;
 import learning_management_system.backend.mapper.CourseModuleMapper;
+import learning_management_system.backend.repository.AssignmentRepository;
 import learning_management_system.backend.repository.ContentRepository;
 import learning_management_system.backend.repository.ContentTypeRepository;
 import learning_management_system.backend.repository.CourseModuleRepository;
@@ -53,6 +56,8 @@ import java.util.stream.Collectors;
 public class CourseModuleServiceImplementation implements CourseModuleService {
     private static final Set<ModuleCompletionRequirementType> CONTENT_REQUIREMENTS =
             EnumSet.of(ModuleCompletionRequirementType.VIEW, ModuleCompletionRequirementType.MARK_DONE);
+    private static final Set<ModuleCompletionRequirementType> ASSIGNMENT_REQUIREMENTS =
+            EnumSet.of(ModuleCompletionRequirementType.SUBMIT, ModuleCompletionRequirementType.MIN_SCORE);
 
     private final CourseRepository courses;
     private final CourseSectionRepository sections;
@@ -60,6 +65,7 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     private final ModulePrerequisiteRepository prerequisites;
     private final ModuleCompletionRequirementRepository requirements;
     private final ContentRepository contents;
+    private final AssignmentRepository assignments;
     private final ContentTypeRepository types;
     private final ModuleProgressService progress;
     private final CourseAccess access;
@@ -69,7 +75,8 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     public CourseModuleServiceImplementation(CourseRepository courses, CourseSectionRepository sections,
                                              CourseModuleRepository modules, ModulePrerequisiteRepository prerequisites,
                                              ModuleCompletionRequirementRepository requirements, ContentRepository contents,
-                                             ContentTypeRepository types, ModuleProgressService progress, CourseAccess access,
+                                             AssignmentRepository assignments, ContentTypeRepository types,
+                                             ModuleProgressService progress, CourseAccess access,
                                              CourseModuleMapper moduleMapper, EntityRefresher refresher) {
         this.courses = courses;
         this.sections = sections;
@@ -77,6 +84,7 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
         this.prerequisites = prerequisites;
         this.requirements = requirements;
         this.contents = contents;
+        this.assignments = assignments;
         this.types = types;
         this.progress = progress;
         this.access = access;
@@ -114,26 +122,42 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
         Map<UUID, List<UUID>> pre = prereqMap(ids);
         Map<UUID, List<ModuleCompletionRequirement>> req = reqMap(ids);
         Map<UUID, List<Content>> items = new HashMap<>();
-        if (!ids.isEmpty()) contents.findByModuleIdIn(ids).forEach(x -> items.computeIfAbsent(x.getModuleId(), k -> new ArrayList<>()).add(x));
+        Map<UUID, List<Assignment>> work = new HashMap<>();
+        if (!ids.isEmpty()) {
+            contents.findByModuleIdIn(ids).forEach(x -> items.computeIfAbsent(x.getModuleId(), k -> new ArrayList<>()).add(x));
+            assignments.findByModuleIdIn(ids).forEach(x -> work.computeIfAbsent(x.getModuleId(), k -> new ArrayList<>()).add(x));
+        }
         Map<UUID, String> typeCodes = types.findAll().stream().collect(Collectors.toMap(ContentType::getTypeId, ContentType::getTypeCode));
 
         List<ModuleViewDto> out = new ArrayList<>();
         for (CourseModule m : list) {
             ModuleState s = states.get(m.getModuleId());
             if (!staff && s == null) continue;                          // unpublished, or for another section
-            Map<UUID, ModuleCompletionRequirementType> reqType = new HashMap<>();
-            req.getOrDefault(m.getModuleId(), List.of()).forEach(r -> { if (r.getContentId() != null) reqType.put(r.getContentId(), r.getRequirementType()); });
-            List<ModuleItemDto> itemDtos = items.getOrDefault(m.getModuleId(), List.of()).stream()
-                    .filter(x -> staff || (Boolean.TRUE.equals(x.getIsPublished()) && ModuleProgressServiceImplementation.studentVisible(x)))
-                    .sorted((a, b) -> Integer.compare(nz(a.getDisplayOrder()), nz(b.getDisplayOrder())))
-                    .map(x -> new ModuleItemDto(x.getContentId(), x.getContentTitle(), typeCodes.get(x.getTypeId()), x.getIsPublished(),
-                            x.getDisplayOrder(), reqType.get(x.getContentId()),
-                            staff ? null : s.completedContentIds().contains(x.getContentId()),
-                            staff ? null : s.lockedContent().containsKey(x.getContentId())))
-                    .toList();
+            Map<UUID, ModuleCompletionRequirement> reqOf = new HashMap<>();
+            req.getOrDefault(m.getModuleId(), List.of()).forEach(r -> reqOf.put(r.getContentId() != null ? r.getContentId() : r.getAssignmentId(), r));
+            List<ModuleItemDto> itemDtos = new ArrayList<>();
+            for (Content x : items.getOrDefault(m.getModuleId(), List.of())) {
+                if (!staff && !(Boolean.TRUE.equals(x.getIsPublished()) && ModuleProgressServiceImplementation.studentVisible(x))) continue;
+                itemDtos.add(item("CONTENT", x.getContentId(), x.getContentId(), null, x.getContentTitle(), typeCodes.get(x.getTypeId()),
+                        x.getIsPublished(), x.getDisplayOrder(), reqOf.get(x.getContentId()), staff ? null : s));
+            }
+            for (Assignment x : work.getOrDefault(m.getModuleId(), List.of())) {
+                if (!staff && !Boolean.TRUE.equals(x.getIsPublished())) continue;
+                itemDtos.add(item("ASSIGNMENT", x.getAssignmentId(), null, x.getAssignmentId(), x.getAssignmentTitle(),
+                        x.getAssignmentType().name(), x.getIsPublished(), x.getDisplayOrder(), reqOf.get(x.getAssignmentId()), staff ? null : s));
+            }
+            itemDtos.sort((p, q) -> p.displayOrder().equals(q.displayOrder()) ? p.title().compareTo(q.title())
+                    : Integer.compare(p.displayOrder(), q.displayOrder()));
             out.add(new ModuleViewDto(toDto(m, pre, req), staff ? null : s.status(), staff ? null : s.lockReason(), itemDtos));
         }
         return out;
+    }
+
+    private static ModuleItemDto item(String kind, UUID id, UUID contentId, UUID assignmentId, String title, String typeCode,
+                                      Boolean published, Integer order, ModuleCompletionRequirement r, ModuleState s) {
+        return new ModuleItemDto(kind, id, contentId, assignmentId, title, typeCode, published, nz(order),
+                r == null ? null : r.getRequirementType(), r == null ? null : r.getMinScore(),
+                s == null ? null : s.completedItemIds().contains(id), s == null ? null : s.lockedItems().containsKey(id));
     }
 
     // ---------------------------------------------------------------- authoring
@@ -186,6 +210,13 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
                 contents.save(x);
             }
             contents.flush();
+            for (Assignment a : assignments.findByModuleIdIn(List.of(moduleId))) {
+                if (Boolean.TRUE.equals(a.getIsPublished())) continue;
+                a.setIsPublished(true);
+                a.setAssignmentStatus(AssignmentStatus.PUBLISHED);
+                assignments.save(a);
+            }
+            assignments.flush();
         }
         return toDto(m);
     }
@@ -245,17 +276,41 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     public CourseModuleDto addRequirement(UUID moduleId, AddModuleRequirementRequest r) {
         CourseModule m = module(moduleId);
         access.requireCourseEditor(m.getCourseId());
-        if (!CONTENT_REQUIREMENTS.contains(r.requirementType())) {
-            throw ApiException.badRequest("REQUIREMENT_NOT_SUPPORTED_YET",
-                    r.requirementType() + " requirements arrive with assignments, quizzes and discussions; use VIEW or MARK_DONE");
+        if ((r.contentId() == null) == (r.assignmentId() == null)) {
+            throw ApiException.badRequest("ONE_ITEM_REQUIRED", "Give either contentId or assignmentId");
         }
-        Content x = contents.findById(r.contentId()).filter(c -> moduleId.equals(c.getModuleId()))
-                .orElseThrow(() -> ApiException.badRequest("ITEM_NOT_IN_MODULE", "The item is not in this module"));
-        ModuleCompletionRequirement req = requirements.findByModuleIdAndContentId(moduleId, x.getContentId()).orElseGet(ModuleCompletionRequirement::new);
+        ModuleCompletionRequirement req;
+        Integer order;
+        if (r.contentId() != null) {
+            if (!CONTENT_REQUIREMENTS.contains(r.requirementType())) {
+                throw ApiException.badRequest("REQUIREMENT_NOT_FOR_CONTENT", "Content items take VIEW or MARK_DONE requirements");
+            }
+            Content x = contents.findById(r.contentId()).filter(c -> moduleId.equals(c.getModuleId()))
+                    .orElseThrow(() -> ApiException.badRequest("ITEM_NOT_IN_MODULE", "The item is not in this module"));
+            req = requirements.findByModuleIdAndContentId(moduleId, x.getContentId()).orElseGet(ModuleCompletionRequirement::new);
+            req.setContentId(x.getContentId());
+            req.setMinScore(null);
+            order = x.getDisplayOrder();
+        } else {
+            if (!ASSIGNMENT_REQUIREMENTS.contains(r.requirementType())) {
+                throw ApiException.badRequest("REQUIREMENT_NOT_FOR_ASSIGNMENT", "Assignments take SUBMIT or MIN_SCORE requirements");
+            }
+            Assignment x = assignments.findById(r.assignmentId()).filter(a -> moduleId.equals(a.getModuleId()))
+                    .orElseThrow(() -> ApiException.badRequest("ITEM_NOT_IN_MODULE", "The assignment is not in this module"));
+            if (r.requirementType() == ModuleCompletionRequirementType.MIN_SCORE) {
+                if (r.minScore() == null) throw ApiException.badRequest("MIN_SCORE_REQUIRED", "MIN_SCORE needs minScore (points)");
+                if (x.getPointsPossible() != null && r.minScore().compareTo(x.getPointsPossible()) > 0) {
+                    throw ApiException.badRequest("MIN_SCORE_TOO_HIGH", "minScore is higher than the assignment's points");
+                }
+            }
+            req = requirements.findByModuleIdAndAssignmentId(moduleId, x.getAssignmentId()).orElseGet(ModuleCompletionRequirement::new);
+            req.setAssignmentId(x.getAssignmentId());
+            req.setMinScore(r.requirementType() == ModuleCompletionRequirementType.MIN_SCORE ? r.minScore() : null);
+            order = x.getDisplayOrder();
+        }
         req.setModuleId(moduleId);
-        req.setContentId(x.getContentId());
         req.setRequirementType(r.requirementType());
-        req.setDisplayOrder(x.getDisplayOrder());
+        req.setDisplayOrder(order);
         requirements.saveAndFlush(req);
         return toDto(m);
     }
@@ -278,12 +333,19 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
         CourseModule m = module(moduleId);
         access.requireCourseEditor(m.getCourseId());
         List<Content> items = contents.findByModuleIdOrderByDisplayOrderAscContentTitleAsc(moduleId);
-        requireSameIds(items.stream().map(Content::getContentId).toList(), r.orderedIds(), "item");
-        Map<UUID, Content> byId = items.stream().collect(Collectors.toMap(Content::getContentId, x -> x));
-        for (int i = 0; i < r.orderedIds().size(); i++) byId.get(r.orderedIds().get(i)).setDisplayOrder(i + 1);
+        List<Assignment> work = assignments.findByModuleIdIn(List.of(moduleId));
+        List<UUID> current = new ArrayList<>(items.stream().map(Content::getContentId).toList());
+        current.addAll(work.stream().map(Assignment::getAssignmentId).toList());
+        requireSameIds(current, r.orderedIds(), "item");
+        Map<UUID, Integer> position = new HashMap<>();
+        for (int i = 0; i < r.orderedIds().size(); i++) position.put(r.orderedIds().get(i), i + 1);
+        items.forEach(x -> x.setDisplayOrder(position.get(x.getContentId())));
+        work.forEach(x -> x.setDisplayOrder(position.get(x.getAssignmentId())));
         contents.saveAllAndFlush(items);
+        assignments.saveAllAndFlush(work);
         for (ModuleCompletionRequirement req : requirements.findByModuleIdOrderByDisplayOrderAsc(moduleId)) {
-            if (req.getContentId() != null && byId.containsKey(req.getContentId())) req.setDisplayOrder(byId.get(req.getContentId()).getDisplayOrder());
+            UUID item = req.getContentId() != null ? req.getContentId() : req.getAssignmentId();
+            if (item != null && position.containsKey(item)) req.setDisplayOrder(position.get(item));
         }
         requirements.flush();
         return views(course(m.getCourseId()), List.of(m)).get(0);

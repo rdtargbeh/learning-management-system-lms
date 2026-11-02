@@ -14,6 +14,7 @@ import learning_management_system.backend.repository.PlatformUserProfileReposito
 import learning_management_system.backend.repository.UserProfileRepository;
 import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.security.RequestContext;
+import learning_management_system.backend.service.TenantPlanService;
 import learning_management_system.backend.service.UserProvisioningService;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -33,21 +34,25 @@ public class UserProvisioningServiceImplementation implements UserProvisioningSe
     private final PlatformUserProfileRepository platformProfiles;
     private final PasswordEncoder encoder;
     private final UserMapper userMapper;
+    private final TenantPlanService plans;
 
     public UserProvisioningServiceImplementation(UserRepository users, UserProfileRepository profiles,
                                                  PlatformUserProfileRepository platformProfiles, PasswordEncoder encoder,
-                                                 UserMapper userMapper) {
+                                                 UserMapper userMapper, TenantPlanService plans) {
         this.users = users;
         this.profiles = profiles;
         this.platformProfiles = platformProfiles;
         this.encoder = encoder;
         this.userMapper = userMapper;
+        this.plans = plans;
     }
 
     @Override
     public User provisionTenantUser(CreateUserRequest r, UUID tenantId) {
+        plans.requireRoom(tenantId, r.userType());
         User u = newTenantUser(r, tenantId, RequestContext.current().userId());
         users.saveAndFlush(u);
+        plans.refreshCounts(tenantId);
         applyProfile(u.getUserId(), r.profile());
         return u;
     }

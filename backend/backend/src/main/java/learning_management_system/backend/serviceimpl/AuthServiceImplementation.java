@@ -1,35 +1,45 @@
 package learning_management_system.backend.serviceimpl;
 
 import learning_management_system.backend.dto.ChangePasswordRequest;
+import learning_management_system.backend.dto.LoginHistoryDto;
 import learning_management_system.backend.dto.LoginRequest;
 import learning_management_system.backend.dto.LoginResponse;
+import learning_management_system.backend.dto.MfaVerifyRequest;
+import learning_management_system.backend.dto.PageResponse;
 import learning_management_system.backend.dto.UserDetailDto;
-import learning_management_system.backend.dto.UserSummaryDto;
 import learning_management_system.backend.entity.LoginHistory;
 import learning_management_system.backend.entity.PlatformUserProfile;
 import learning_management_system.backend.entity.Tenant;
 import learning_management_system.backend.entity.User;
-import learning_management_system.backend.entity.UserRole;
 import learning_management_system.backend.enums.AccountStatus;
 import learning_management_system.backend.enums.LoginMethod;
 import learning_management_system.backend.enums.LoginStatus;
+import learning_management_system.backend.enums.Severity;
 import learning_management_system.backend.enums.TenantStatus;
 import learning_management_system.backend.enums.UserType;
 import learning_management_system.backend.exception.ApiException;
+import learning_management_system.backend.mapper.IdentityMapper;
 import learning_management_system.backend.repository.LoginHistoryRepository;
 import learning_management_system.backend.repository.PlatformUserProfileRepository;
-import learning_management_system.backend.repository.RolePermissionRepository;
 import learning_management_system.backend.repository.TenantRepository;
+import learning_management_system.backend.repository.TenantSettingsRepository;
+import learning_management_system.backend.repository.UserLoginRepository;
 import learning_management_system.backend.repository.UserRepository;
-import learning_management_system.backend.repository.UserRoleRepository;
 import learning_management_system.backend.security.Access;
+import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.security.SystemTx;
 import learning_management_system.backend.security.TokenService;
+import learning_management_system.backend.service.AccountLockService;
+import learning_management_system.backend.service.AuditService;
 import learning_management_system.backend.service.AuthService;
+import learning_management_system.backend.service.MfaService;
+import learning_management_system.backend.service.SessionService;
 import learning_management_system.backend.service.UserService;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,11 +47,8 @@ import java.net.InetAddress;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 
-/**
- * Password sign-in for platform staff (no tenantCode) and institution users (tenantCode required).
- * Lookups run in a trusted system context because RLS hides users until the tenant/user is known.
- */
 @Service
 public class AuthServiceImplementation implements AuthService {
 
@@ -51,32 +58,46 @@ public class AuthServiceImplementation implements AuthService {
     private final SystemTx sys;
     private final UserRepository users;
     private final TenantRepository tenants;
-    private final UserRoleRepository userRoles;
-    private final RolePermissionRepository rolePermissions;
+    private final TenantSettingsRepository tenantSettings;
+    private final UserLoginRepository userLogins;
     private final PlatformUserProfileRepository platformProfiles;
     private final LoginHistoryRepository loginHistory;
     private final PasswordEncoder encoder;
     private final TokenService tokens;
     private final UserService userService;
+    private final SessionService sessions;
+    private final MfaService mfa;
+    private final AccountLockService locks;
+    private final AuditService audit;
+    private final IdentityMapper identityMapper;
 
-    public AuthServiceImplementation(SystemTx sys, UserRepository users, TenantRepository tenants,
-                                     UserRoleRepository userRoles, RolePermissionRepository rolePermissions,
-                                     PlatformUserProfileRepository platformProfiles, LoginHistoryRepository loginHistory,
-                                     PasswordEncoder encoder, TokenService tokens, UserService userService) {
+    public AuthServiceImplementation(SystemTx sys, UserRepository users, TenantRepository tenants, TenantSettingsRepository tenantSettings,
+                                     UserLoginRepository userLogins, PlatformUserProfileRepository platformProfiles,
+                                     LoginHistoryRepository loginHistory, PasswordEncoder encoder, TokenService tokens,
+                                     UserService userService, SessionService sessions, MfaService mfa, AccountLockService locks,
+                                     AuditService audit, IdentityMapper identityMapper) {
         this.sys = sys;
         this.users = users;
         this.tenants = tenants;
-        this.userRoles = userRoles;
-        this.rolePermissions = rolePermissions;
+        this.tenantSettings = tenantSettings;
+        this.userLogins = userLogins;
         this.platformProfiles = platformProfiles;
         this.loginHistory = loginHistory;
         this.encoder = encoder;
         this.tokens = tokens;
         this.userService = userService;
+        this.sessions = sessions;
+        this.mfa = mfa;
+        this.locks = locks;
+        this.audit = audit;
+        this.identityMapper = identityMapper;
     }
 
+    // ---------------------------------------------------------------- sign-in
+
+    /** Lookups run in a trusted system context because RLS hides users until the tenant/user is known. */
     @Override
-    public LoginResponse login(LoginRequest r, InetAddress ip) {
+    public LoginResponse login(LoginRequest r, InetAddress ip, String userAgent) {
         String login = r.login().trim();
         UUID tenantId;
         User user;
@@ -91,54 +112,129 @@ public class AuthServiceImplementation implements AuthService {
             }
             tenantId = tenant.getTenantId();
             user = sys.inTenant(tenantId, () -> users.findByTenantIdAndUsernameIgnoreCase(tenantId, login)
-                    .or(() -> users.findByTenantIdAndEmail(tenantId, login)).orElse(null));
+                    .or(() -> users.findByTenantIdAndEmail(tenantId, login))
+                    .or(() -> userLogins.findFirstByTenantIdAndUniqueLoginIgnoreCaseAndIsActiveTrue(tenantId, login)
+                            .flatMap(l -> users.findById(l.getUserId())))
+                    .orElse(null));
         }
         if (user == null) {
-            record(null, tenantId, login, ip, LoginStatus.FAILED, "unknown login");
+            record(null, tenantId, login, ip, LoginStatus.FAILED, "unknown login", false);
             throw ApiException.unauthorized("Invalid credentials");
         }
         final UUID userId = user.getUserId();
-        if (user.getAccountLockedUntil() != null && user.getAccountLockedUntil().isAfter(OffsetDateTime.now())) {
-            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "account locked");
-            throw new ApiException(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "Account is temporarily locked; try again later");
-        }
-        if (user.getAccountStatus() != AccountStatus.ACTIVE) {
-            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "status " + user.getAccountStatus());
-            throw ApiException.unauthorized("Account is not active");
-        }
+        requireMaySignIn(user, tenantId, login, ip);
         if (user.getPasswordHash() == null || !encoder.matches(r.password(), user.getPasswordHash())) {
-            onFailure(userId, tenantId);
-            record(userId, tenantId, login, ip, LoginStatus.FAILED, "bad password");
+            onFailure(userId, tenantId, ip);
+            record(userId, tenantId, login, ip, LoginStatus.FAILED, "bad password", false);
             throw ApiException.unauthorized("Invalid credentials");
         }
+        if (inUserScope(tenantId, () -> mfa.isEnabled(userId))) {
+            inUserScope(tenantId, () -> {                     // the password was right: forget earlier misses
+                User u = users.findById(userId).orElseThrow();
+                u.setFailedLoginAttempts(0);
+                return users.save(u);
+            });
+            record(userId, tenantId, login, ip, LoginStatus.MFA_REQUIRED, null, false);
+            return new LoginResponse(null, null, tokens.mfaPendingSeconds(), null, null, null, null, List.of(), null, null,
+                    true, tokens.issueMfaPending(userId, tenantId), false);
+        }
+        return complete(userId, tenantId, login, ip, userAgent, false);
+    }
 
-        User updated = inUserScope(tenantId, () -> {
+    @Override
+    public LoginResponse verifyMfa(MfaVerifyRequest r, InetAddress ip, String userAgent) {
+        UUID[] ids;
+        try {
+            ids = tokens.parseMfaPending(r.mfaToken());
+        } catch (JwtException | IllegalArgumentException e) {
+            throw ApiException.unauthorized("Sign in again");
+        }
+        UUID userId = ids[0], tenantId = ids[1];
+        User user = inUserScope(tenantId, () -> users.findById(userId).orElse(null));
+        if (user == null) throw ApiException.unauthorized("Sign in again");
+        requireMaySignIn(user, tenantId, user.getUsername(), ip);
+        if (!inUserScope(tenantId, () -> mfa.verifyLoginCode(userId, r.code()))) {
+            record(userId, tenantId, user.getUsername(), ip, LoginStatus.FAILED, "bad MFA code", true);
+            throw ApiException.unauthorized("The code is not correct");
+        }
+        return complete(userId, tenantId, user.getUsername(), ip, userAgent, true);
+    }
+
+    /** Lock and status checks shared by both sign-in steps. */
+    private void requireMaySignIn(User user, UUID tenantId, String login, InetAddress ip) {
+        UUID userId = user.getUserId();
+        if (user.getAccountLockedUntil() != null && user.getAccountLockedUntil().isAfter(OffsetDateTime.now())) {
+            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "account locked", false);
+            throw new ApiException(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "Account is temporarily locked; try again later");
+        }
+        if (user.getAccountStatus() == AccountStatus.LOCKED && inUserScope(tenantId, () -> locks.stillLocked(userId))) {
+            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "locked by an administrator", false);
+            throw new ApiException(HttpStatus.LOCKED, "ACCOUNT_LOCKED", "Account is locked; contact your administrator");
+        }
+        User fresh = inUserScope(tenantId, () -> users.findById(userId).orElseThrow());
+        if (fresh.getAccountStatus() != AccountStatus.ACTIVE) {
+            record(userId, tenantId, login, ip, LoginStatus.BLOCKED, "status " + fresh.getAccountStatus(), false);
+            throw ApiException.unauthorized("Account is not active");
+        }
+    }
+
+    private LoginResponse complete(UUID userId, UUID tenantId, String login, InetAddress ip, String userAgent, boolean mfaUsed) {
+        LoginResponse resp = inUserScope(tenantId, () -> {
             User u = users.findById(userId).orElseThrow();
             u.setFailedLoginAttempts(0);
             u.setAccountLockedUntil(null);
             u.setLastLogin(OffsetDateTime.now());
             u.setLoginCount(u.getLoginCount() == null ? 1 : u.getLoginCount() + 1);
+            users.save(u);
+            boolean mfaOn = mfa.isEnabled(userId);
+            boolean tenantRequires = tenantId != null && tenantSettings.findByTenantId(tenantId)
+                    .map(s -> Boolean.TRUE.equals(s.getRequireMfa())).orElse(false);
+            boolean setupRequired = !mfaOn && (Boolean.TRUE.equals(u.getMfaRequired()) || tenantRequires);
+            return sessions.start(u, tenantId, ip, userAgent, setupRequired);
+        });
+        record(userId, tenantId, login, ip, LoginStatus.SUCCESS, null, mfaUsed);
+        return resp;
+    }
+
+    private void onFailure(UUID userId, UUID tenantId, InetAddress ip) {
+        inUserScope(tenantId, () -> {
+            User u = users.findById(userId).orElseThrow();
+            int failed = (u.getFailedLoginAttempts() == null ? 0 : u.getFailedLoginAttempts()) + 1;
+            u.setFailedLoginAttempts(failed);
+            u.setLastFailedLogin(OffsetDateTime.now());
+            if (failed >= MAX_FAILED_ATTEMPTS) {
+                OffsetDateTime until = OffsetDateTime.now().plusMinutes(LOCK_MINUTES);
+                u.setAccountLockedUntil(until);
+                u.setFailedLoginAttempts(0);
+                users.save(u);
+                locks.recordAutomaticLock(userId, failed, ip, until);
+                return u;
+            }
             return users.save(u);
         });
-        record(userId, tenantId, login, ip, LoginStatus.SUCCESS, null);
-
-        List<String> perms = inUserScope(tenantId, () -> permissionsOf(userId));
-        String platformRole = Boolean.TRUE.equals(updated.getIsSystemUser())
-                ? sys.platform(() -> platformProfiles.findByUserId(userId).map(p -> p.getPlatformRole().name()).orElse(null))
-                : null;
-        String token = tokens.issue(userId, tenantId, updated.getUserType().name(), Boolean.TRUE.equals(updated.getIsSystemUser()),
-                platformRole, perms, null);
-        UserSummaryDto summary = inUserScope(tenantId, () -> userService.toSummary(updated));
-        return new LoginResponse(token, "Bearer", tokens.ttlSeconds(), summary, perms, platformRole, null);
     }
 
-    /** Permission codes granted through the user's roles. */
-    private List<String> permissionsOf(UUID userId) {
-        List<UUID> roleIds = userRoles.findByUserId(userId).stream().map(UserRole::getRoleId).toList();
-        return roleIds.isEmpty() ? List.of() : rolePermissions.findPermissionCodesForRoles(roleIds).stream().distinct().sorted().toList();
+    private void record(UUID userId, UUID tenantId, String login, InetAddress ip, LoginStatus status, String reason, boolean mfaUsed) {
+        inUserScope(tenantId, () -> {
+            LoginHistory h = new LoginHistory();
+            h.setUserId(userId);
+            h.setTenantId(tenantId);
+            h.setUsername(login.length() > 100 ? login.substring(0, 100) : login);
+            h.setIpAddress(ip);
+            h.setLoginStatus(status);
+            h.setLoginMethod(LoginMethod.PASSWORD);
+            h.setFailureReason(reason);
+            h.setMfaUsed(mfaUsed);
+            return loginHistory.save(h);
+        });
     }
 
-    /** The signed-in user with all of their profiles. */
+    private <T> T inUserScope(UUID tenantId, Supplier<T> work) {
+        return tenantId == null ? sys.platform(work) : sys.inTenant(tenantId, work);
+    }
+
+    // ---------------------------------------------------------------- own account
+
     @Transactional(readOnly = true)
     @Override
     public UserDetailDto me() {
@@ -153,45 +249,28 @@ public class AuthServiceImplementation implements AuthService {
         if (u.getPasswordHash() == null || !encoder.matches(r.currentPassword(), u.getPasswordHash())) {
             throw ApiException.badRequest("WRONG_PASSWORD", "Current password is incorrect");
         }
+        if (encoder.matches(r.newPassword(), u.getPasswordHash())) {
+            throw ApiException.badRequest("SAME_PASSWORD", "Choose a new password");
+        }
         u.setPasswordHash(encoder.encode(r.newPassword()));
         u.setPasswordLastChanged(OffsetDateTime.now());
         u.setMustChangePassword(false);
         users.save(u);
+        UUID current = Access.currentSessionId();
+        sessions.mine().stream().filter(s -> !s.sessionId().equals(current)).forEach(s -> sessions.revoke(s.sessionId()));
+        audit.record("PASSWORD_CHANGED", "USER", me, me, Severity.INFO, null, null);
     }
 
-    private void onFailure(UUID userId, UUID tenantId) {
-        inUserScope(tenantId, () -> {
-            User u = users.findById(userId).orElseThrow();
-            int failed = (u.getFailedLoginAttempts() == null ? 0 : u.getFailedLoginAttempts()) + 1;
-            u.setFailedLoginAttempts(failed);
-            u.setLastFailedLogin(OffsetDateTime.now());
-            if (failed >= MAX_FAILED_ATTEMPTS) {
-                u.setAccountLockedUntil(OffsetDateTime.now().plusMinutes(LOCK_MINUTES));
-                u.setFailedLoginAttempts(0);
-            }
-            return users.save(u);
-        });
+    @Transactional(readOnly = true)
+    @Override
+    public PageResponse<LoginHistoryDto> loginHistory(UUID userId, int page, int size) {
+        if (!Access.isSelf(userId)) Access.requireTenantPermission(Permissions.USER_READ);
+        return PageResponse.of(loginHistory.findByUserIdOrderByLoginTimestampDesc(userId, PageRequest.of(page, Math.min(size, 200))),
+                identityMapper::toDto);
     }
 
-    private void record(UUID userId, UUID tenantId, String login, InetAddress ip, LoginStatus status, String reason) {
-        inUserScope(tenantId, () -> {
-            LoginHistory h = new LoginHistory();
-            h.setUserId(userId);
-            h.setTenantId(tenantId);
-            h.setUsername(login.length() > 100 ? login.substring(0, 100) : login);
-            h.setIpAddress(ip);
-            h.setLoginStatus(status);
-            h.setLoginMethod(LoginMethod.PASSWORD);
-            h.setFailureReason(reason);
-            return loginHistory.save(h);
-        });
-    }
+    // ---------------------------------------------------------------- support sessions
 
-    private <T> T inUserScope(UUID tenantId, java.util.function.Supplier<T> work) {
-        return tenantId == null ? sys.platform(work) : sys.inTenant(tenantId, work);
-    }
-
-    /** Builds a tenant-scoped token for an active support-access session (used by PlatformService). */
     @Override
     public String supportToken(UUID platformUserId, UUID tenantId, UUID supportAccessId) {
         String platformRole = sys.platform(() -> platformProfiles.findByUserId(platformUserId)

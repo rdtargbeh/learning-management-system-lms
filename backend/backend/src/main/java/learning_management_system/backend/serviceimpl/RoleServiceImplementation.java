@@ -12,6 +12,7 @@ import learning_management_system.backend.entity.RolePermission;
 import learning_management_system.backend.entity.UserRole;
 import learning_management_system.backend.enums.RoleLevel;
 import learning_management_system.backend.enums.RoleScope;
+import learning_management_system.backend.enums.Severity;
 import learning_management_system.backend.exception.ApiException;
 import learning_management_system.backend.mapper.RoleMapper;
 import learning_management_system.backend.repository.PermissionRepository;
@@ -21,6 +22,7 @@ import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.repository.UserRoleRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.Permissions;
+import learning_management_system.backend.service.AuditService;
 import learning_management_system.backend.service.RoleService;
 
 import org.springframework.stereotype.Service;
@@ -40,16 +42,18 @@ public class RoleServiceImplementation implements RoleService {
     private final UserRoleRepository userRoles;
     private final UserRepository users;
     private final RoleMapper roleMapper;
+    private final AuditService audit;
 
     public RoleServiceImplementation(RoleRepository roles, PermissionRepository permissions,
                                      RolePermissionRepository rolePermissions, UserRoleRepository userRoles,
-                                     UserRepository users, RoleMapper roleMapper) {
+                                     UserRepository users, RoleMapper roleMapper, AuditService audit) {
         this.roles = roles;
         this.permissions = permissions;
         this.rolePermissions = rolePermissions;
         this.userRoles = userRoles;
         this.users = users;
         this.roleMapper = roleMapper;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -118,6 +122,7 @@ public class RoleServiceImplementation implements RoleService {
         ur.setDateAssigned(LocalDate.now());
         ur.setDateAssignedBy(Access.ctx().userId());
         userRoles.saveAndFlush(ur);
+        audit.record("ROLE_ASSIGNED", "USER_ROLE", ur.getUserRoleId(), userId, Severity.INFO, null, Map.of("role", role.getRoleName()));
         return roleMapper.toDto(ur, role.getRoleName());
     }
 
@@ -128,6 +133,7 @@ public class RoleServiceImplementation implements RoleService {
         UserRole ur = userRoles.findById(userRoleId).filter(x -> x.getUserId().equals(userId))
                 .orElseThrow(() -> ApiException.notFound("Role assignment"));
         userRoles.delete(ur);
+        audit.record("ROLE_UNASSIGNED", "USER_ROLE", userRoleId, userId, Severity.INFO, null, null);
     }
 
     private Role editable(UUID roleId) {

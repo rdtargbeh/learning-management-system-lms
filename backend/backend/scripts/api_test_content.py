@@ -140,8 +140,8 @@ check(set(sv) == {'Week 1 Getting Started', 'Week 2 Variables', 'Week 4 Coming S
 check(sv['Week 1 Getting Started']['progressStatus'] == 'UNLOCKED', 'M1 unlocked')
 check(sv['Week 2 Variables']['progressStatus'] == 'LOCKED' and 'Week 1' in sv['Week 2 Variables'].get('lockReason', ''), 'M2 locked until M1 is complete')
 check(sv['Week 4 Coming Soon']['progressStatus'] == 'LOCKED' and sv['Week 4 Coming Soon'].get('lockReason', '').startswith('Unlocks on'), 'M4 locked until its date')
-check([i['contentTitle'] for i in sv['Week 1 Getting Started']['items']] == ['Welcome Page', 'Syllabus Overview'], 'student does not see instructor-only item')
-check(all(i['contentTitle'] != 'Draft Notes' for i in sv['Week 2 Variables']['items']), 'student does not see unpublished item')
+check([i['title'] for i in sv['Week 1 Getting Started']['items']] == ['Welcome Page', 'Syllabus Overview'], 'student does not see instructor-only item')
+check(all(i['title'] != 'Draft Notes' for i in sv['Week 2 Variables']['items']), 'student does not see unpublished item')
 s2v = by_title(call('GET', f'/courses/{C}/modules', token=S2, expect=200, label='student two module view'))
 check('Week 3 Section 02 Lab' in s2v, 'section-02 student sees section module')
 call('GET', f"/content/{secret['contentId']}", token=S1, expect=404, label='instructor-only item hidden')
@@ -166,19 +166,19 @@ sv = by_title(call('GET', f'/courses/{C}/modules', token=S1, expect=200, label='
 check(sv['Week 1 Getting Started']['progressStatus'] == 'COMPLETED', 'M1 completed')
 w2 = sv['Week 2 Variables']
 check(w2['progressStatus'] == 'UNLOCKED', 'M2 unlocked once M1 is complete')
-locks = {i['contentTitle']: i['locked'] for i in w2['items']}
+locks = {i['title']: i['locked'] for i in w2['items']}
 check(locks == {'Variables Intro': False, 'Lecture Video': True, 'Practice Problems': True}, 'sequential: only the first step is open')
 lv = call('GET', f"/content/{lecture['contentId']}", token=S1, expect=200, label='student opens step 2 too early')
 check(lv.get('lockReason') and 'Variables Intro' in lv['lockReason'] and lv.get('video') is None, 'step 2 locked until step 1')
 call('GET', f"/content/{variables['contentId']}", token=S1, expect=200, label='student views Variables Intro')
 lv = call('GET', f"/content/{lecture['contentId']}", token=S1, expect=200, label='student opens Lecture Video')
 check(lv.get('lockReason') is None and lv['video']['videoUrl'].endswith('w2.mp4'), 'step 2 open after step 1')
-locks = {i['contentTitle']: i['locked'] for i in by_title(call('GET', f'/courses/{C}/modules', token=S1))['Week 2 Variables']['items']}
+locks = {i['title']: i['locked'] for i in by_title(call('GET', f'/courses/{C}/modules', token=S1))['Week 2 Variables']['items']}
 check(locks['Practice Problems'] is True, 'step 3 still locked until the lecture is marked done')
 call('POST', f"/content/{lecture['contentId']}/done", token=S1, expect=200, label='mark Lecture done')
 w2 = by_title(call('GET', f'/courses/{C}/modules', token=S1, expect=200, label='after finishing M2'))['Week 2 Variables']
 check(w2['progressStatus'] == 'COMPLETED' and not any(i.get('locked') for i in w2['items']), 'M2 completed, everything open')
-check({i['contentTitle']: i['completed'] for i in w2['items']} == {'Variables Intro': True, 'Lecture Video': True, 'Practice Problems': False}, 'per-item completion')
+check({i['title']: i['completed'] for i in w2['items']} == {'Variables Intro': True, 'Lecture Video': True, 'Practice Problems': False}, 'per-item completion')
 call('DELETE', f"/content/{lecture['contentId']}/done", token=S1, expect=200, label='undo mark done')
 check(by_title(call('GET', f'/courses/{C}/modules', token=S1))['Week 2 Variables']['progressStatus'] == 'STARTED', 'undo puts M2 back to STARTED')
 call('POST', f"/content/{lecture['contentId']}/done", token=S1, expect=200, label='mark done again')

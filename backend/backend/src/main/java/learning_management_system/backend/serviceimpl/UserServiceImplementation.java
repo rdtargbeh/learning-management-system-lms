@@ -16,6 +16,7 @@ import learning_management_system.backend.entity.StudentProfile;
 import learning_management_system.backend.entity.User;
 import learning_management_system.backend.entity.UserProfile;
 import learning_management_system.backend.enums.AccountStatus;
+import learning_management_system.backend.enums.Severity;
 import learning_management_system.backend.enums.UserType;
 import learning_management_system.backend.exception.ApiException;
 import learning_management_system.backend.mapper.UserMapper;
@@ -27,6 +28,9 @@ import learning_management_system.backend.repository.UserProfileRepository;
 import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.Permissions;
+import learning_management_system.backend.service.AuditService;
+import learning_management_system.backend.service.SessionService;
+import learning_management_system.backend.service.TenantPlanService;
 import learning_management_system.backend.service.UserProvisioningService;
 import learning_management_system.backend.service.UserService;
 
@@ -66,12 +70,15 @@ public class UserServiceImplementation implements UserService {
     private final PlatformUserProfileRepository platformProfiles;
     private final UserProvisioningService provisioning;
     private final UserMapper userMapper;
+    private final TenantPlanService plans;
+    private final SessionService sessions;
+    private final AuditService audit;
 
     public UserServiceImplementation(UserRepository users, UserProfileRepository profiles,
                                      StudentProfileRepository students, EmployeeProfileRepository employees,
                                      AcademicAdvisorProfileRepository advisors, PasswordEncoder encoder,
                                      PlatformUserProfileRepository platformProfiles, UserProvisioningService provisioning,
-                                     UserMapper userMapper) {
+                                     UserMapper userMapper, TenantPlanService plans, SessionService sessions, AuditService audit) {
         this.users = users;
         this.profiles = profiles;
         this.students = students;
@@ -81,6 +88,9 @@ public class UserServiceImplementation implements UserService {
         this.platformProfiles = platformProfiles;
         this.provisioning = provisioning;
         this.userMapper = userMapper;
+        this.plans = plans;
+        this.sessions = sessions;
+        this.audit = audit;
     }
 
     @Transactional
@@ -91,6 +101,8 @@ public class UserServiceImplementation implements UserService {
             throw ApiException.badRequest("INVALID_USER_TYPE", "Platform users are created by platform administrators");
         }
         User u = provisioning.provisionTenantUser(r, Access.ctx().tenantId());   // the trigger creates the profiles
+        audit.record("USER_CREATED", "USER", u.getUserId(), u.getUserId(), Severity.INFO, null,
+                Map.of("username", u.getUsername(), "userType", u.getUserType().name()));
         return toDetail(u);
     }
 
@@ -129,10 +141,18 @@ public class UserServiceImplementation implements UserService {
         Access.requireTenantPermission(Permissions.USER_MANAGE);
         if (Access.isSelf(userId)) throw ApiException.badRequest("SELF_STATUS", "You cannot change your own account status");
         User u = load(userId);
+        boolean wasCounted = u.getAccountStatus() != AccountStatus.DEACTIVATED && u.getAccountStatus() != AccountStatus.DELETED;
+        boolean counted = status != AccountStatus.DEACTIVATED && status != AccountStatus.DELETED;
+        if (counted && !wasCounted) plans.requireRoom(u.getTenantId(), u.getUserType());     // reactivation uses a seat
         u.setAccountStatus(status);
         u.setDateDeactivated(status == AccountStatus.DEACTIVATED ? OffsetDateTime.now() : null);
         if (status == AccountStatus.ACTIVE) { u.setAccountLockedUntil(null); u.setFailedLoginAttempts(0); }
-        return toDetail(users.save(u));
+        users.saveAndFlush(u);
+        plans.refreshCounts(u.getTenantId());
+        if (status != AccountStatus.ACTIVE) sessions.revokeAll(userId);          // signed out everywhere
+        audit.record("USER_STATUS_CHANGED", "USER", userId, userId, status == AccountStatus.ACTIVE ? Severity.INFO : Severity.WARNING,
+                null, Map.of("status", status.name()));
+        return toDetail(u);
     }
 
     @Transactional
@@ -145,6 +165,8 @@ public class UserServiceImplementation implements UserService {
         u.setMustChangePassword(r.mustChangePassword() == null || r.mustChangePassword());
         if (u.getAccountStatus() == AccountStatus.INVITED) u.setAccountStatus(AccountStatus.ACTIVE);
         users.save(u);
+        sessions.revokeAll(userId);
+        audit.record("PASSWORD_SET_BY_ADMIN", "USER", userId, userId, Severity.WARNING, null, null);
     }
 
     // ---------------------------------------------------------------- profiles

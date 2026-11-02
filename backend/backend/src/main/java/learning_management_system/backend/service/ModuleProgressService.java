@@ -17,6 +17,8 @@ import java.util.UUID;
  *   <li>A module is LOCKED while the teacher has locked it, its unlock date is in the future, or a prerequisite module
  *       is not completed; then UNLOCKED, STARTED (something done) or COMPLETED (every requirement met).</li>
  *   <li>A module without requirements counts as COMPLETED once unlocked, so it never blocks the next one.</li>
+ *   <li>Items are content and assignments, in one order. Requirements: VIEW / MARK_DONE for content, SUBMIT /
+ *       MIN_SCORE for assignments (MIN_SCORE counts posted grades; an excused assignment counts as met).</li>
  *   <li>With sequential progress, every item after the first unmet requirement stays locked.</li>
  *   <li>Unpublished modules and items are invisible to students and are ignored.</li>
  * </ul>
@@ -26,13 +28,16 @@ public interface ModuleProgressService {
 
     /** The state of one module for one student. */
     record ModuleState(UUID moduleId, ProgressStatus status, String lockReason, Set<UUID> metRequirementIds,
-                       Set<UUID> completedContentIds, Map<UUID, String> lockedContent) {}
+                       Set<UUID> completedItemIds, Map<UUID, String> lockedItems) {}
 
     /** Evaluates every module of the course the student can see (in course order) and saves changed progress rows. */
     Map<UUID, ModuleState> evaluate(UUID courseId, UUID userId);
 
     /** True when the user takes a seat in the course (their views and completions are tracked). */
     boolean isTrackedStudent(UUID courseId, UUID userId);
+
+    /** Why a student cannot work on this assignment now because of its module (locked module or earlier step), or null. */
+    String moduleLockReason(UUID courseId, UUID moduleId, UUID itemId, UUID userId);
 
     /** Records that the student opened the item; then updates module progress. */
     StudentContentProgress recordView(Content content, UUID userId);

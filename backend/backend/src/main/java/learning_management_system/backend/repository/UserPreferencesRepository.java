@@ -4,9 +4,12 @@ import learning_management_system.backend.entity.UserPreferences;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
+/** One row per user (user_id is unique). */
 @Repository
 public interface UserPreferencesRepository extends JpaRepository<UserPreferences, UUID> {
+
+    Optional<UserPreferences> findByUserId(UUID userId);
 }

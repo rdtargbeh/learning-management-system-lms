@@ -9,10 +9,15 @@ import learning_management_system.backend.dto.PlatformSupportAccessDto;
 import learning_management_system.backend.dto.PlatformUserProfileDto;
 import learning_management_system.backend.dto.SupportAccessRequest;
 import learning_management_system.backend.dto.TenantDto;
+import learning_management_system.backend.dto.TenantSubscriptionDto;
+import learning_management_system.backend.dto.TenantUserLimitDto;
+import learning_management_system.backend.dto.UpdateTenantUserLimitRequest;
+import learning_management_system.backend.dto.UpsertTenantSubscriptionRequest;
 import learning_management_system.backend.dto.UpdateTenantRequest;
 import learning_management_system.backend.dto.UserDetailDto;
 import learning_management_system.backend.dto.UserSummaryDto;
 import learning_management_system.backend.service.PlatformService;
+import learning_management_system.backend.service.TenantPlanService;
 
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -26,8 +31,12 @@ import java.util.UUID;
 @RequestMapping("/api/v1/platform")
 public class PlatformController {
     private final PlatformService platform;
+    private final TenantPlanService plans;
 
-    public PlatformController(PlatformService platform) { this.platform = platform; }
+    public PlatformController(PlatformService platform, TenantPlanService plans) {
+        this.platform = platform;
+        this.plans = plans;
+    }
 
     @PostMapping("/tenants")
     @ResponseStatus(HttpStatus.CREATED)
@@ -43,6 +52,22 @@ public class PlatformController {
 
     @PatchMapping("/tenants/{tenantId}")
     public TenantDto updateTenant(@PathVariable UUID tenantId, @RequestBody UpdateTenantRequest r) { return platform.updateTenant(tenantId, r); }
+
+    @GetMapping("/tenants/{tenantId}/subscription")
+    public TenantSubscriptionDto subscription(@PathVariable UUID tenantId) { return plans.subscription(tenantId); }
+
+    @PutMapping("/tenants/{tenantId}/subscription")
+    public TenantSubscriptionDto upsertSubscription(@PathVariable UUID tenantId, @Valid @RequestBody UpsertTenantSubscriptionRequest r) {
+        return plans.upsertSubscription(tenantId, r);
+    }
+
+    @GetMapping("/tenants/{tenantId}/user-limits")
+    public TenantUserLimitDto userLimits(@PathVariable UUID tenantId) { return plans.userLimits(tenantId); }
+
+    @PutMapping("/tenants/{tenantId}/user-limits")
+    public TenantUserLimitDto updateUserLimits(@PathVariable UUID tenantId, @Valid @RequestBody UpdateTenantUserLimitRequest r) {
+        return plans.updateUserLimits(tenantId, r);
+    }
 
     @PostMapping("/users")
     @ResponseStatus(HttpStatus.CREATED)

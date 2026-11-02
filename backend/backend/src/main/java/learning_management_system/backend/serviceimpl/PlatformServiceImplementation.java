@@ -304,7 +304,8 @@ public class PlatformServiceImplementation implements PlatformService {
         });
         String token = auth.supportToken(me, started.getTenantId(), started.getSupportAccessId());
         UserSummaryDto summary = sys.platform(() -> userService.toSummary(users.findById(me).orElseThrow()));
-        return new LoginResponse(token, "Bearer", auth.ttlSeconds(), summary, List.of(), null, started.getSupportAccessId());
+        return new LoginResponse(token, "Bearer", auth.ttlSeconds(), null, null, null, summary, List.of(), null,
+                started.getSupportAccessId(), false, null, false);
     }
 
     @Override
