@@ -4,9 +4,12 @@ import learning_management_system.backend.entity.MasteryPathRule;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
 public interface MasteryPathRuleRepository extends JpaRepository<MasteryPathRule, UUID> {
+    List<MasteryPathRule> findByCourseIdOrderByDateCreatedAsc(UUID courseId);
+
+    boolean existsByTriggerAssignmentId(UUID triggerAssignmentId);
 }

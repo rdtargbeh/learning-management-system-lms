@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface GroupSetRepository extends JpaRepository<GroupSet, UUID> {
 
     List<GroupSet> findByCourseIdOrderBySetNameAsc(UUID courseId);
+
+    boolean existsByCourseIdAndSetNameIgnoreCase(UUID courseId, String setName);
 }

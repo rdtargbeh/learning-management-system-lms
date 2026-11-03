@@ -153,7 +153,7 @@ public class PeerReviewServiceImplementation implements PeerReviewService {
     private Map<UUID, AssignmentSubmission> latestHandedIn(UUID assignmentId) {
         Map<UUID, AssignmentSubmission> out = new LinkedHashMap<>();
         for (AssignmentSubmission s : submissions.findByAssignmentIdOrderByUserIdAscSubmissionNumberAsc(assignmentId)) {
-            if (s.getSubmittedAt() != null && ModuleProgressServiceImplementation.HANDED_IN.contains(s.getSubmissionStatus())) out.put(s.getUserId(), s);
+            if (s.getSubmittedAt() != null && StudentModuleProgressServiceImplementation.HANDED_IN.contains(s.getSubmissionStatus())) out.put(s.getUserId(), s);
         }
         return out;
     }

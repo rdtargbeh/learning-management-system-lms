@@ -4,9 +4,13 @@ import learning_management_system.backend.entity.MasteryPathRange;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.UUID;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
 public interface MasteryPathRangeRepository extends JpaRepository<MasteryPathRange, UUID> {
+    List<MasteryPathRange> findByRuleIdOrderByLowerBoundPercentAsc(UUID ruleId);
+
+    List<MasteryPathRange> findByRuleIdIn(Collection<UUID> ruleIds);
 }

@@ -41,28 +41,19 @@ import java.util.UUID;
 public class CourseSectionServiceImplementation implements CourseSectionService {
     private final CourseRepository courses;
     private final CourseSectionRepository sections;
-    private final CourseInstructorRepository staff;
-    private final EnrollmentRepository enrollments;
     private final AcademicTermRepository terms;
-    private final UserRepository users;
-    private final UserService userService;
     private final EnrollmentProvisioningService provisioning;
     private final CourseAccess access;
     private final CourseSectionMapper sectionMapper;
     private final EntityRefresher refresher;
 
     public CourseSectionServiceImplementation(CourseRepository courses, CourseSectionRepository sections,
-                                              CourseInstructorRepository staff, EnrollmentRepository enrollments,
-                                              AcademicTermRepository terms, UserRepository users, UserService userService,
+                                              AcademicTermRepository terms,
                                               EnrollmentProvisioningService provisioning, CourseAccess access,
                                               CourseSectionMapper sectionMapper, EntityRefresher refresher) {
         this.courses = courses;
         this.sections = sections;
-        this.staff = staff;
-        this.enrollments = enrollments;
         this.terms = terms;
-        this.users = users;
-        this.userService = userService;
         this.provisioning = provisioning;
         this.access = access;
         this.sectionMapper = sectionMapper;
@@ -141,66 +132,7 @@ public class CourseSectionServiceImplementation implements CourseSectionService 
         return sectionMapper.toDto(sections.saveAndFlush(s));
     }
 
-    @Transactional(readOnly = true)
-    @Override
-    public List<CourseInstructorDto> staff(UUID sectionId) {
-        CourseSection s = section(sectionId);
-        access.requireCourseViewer(course(s.getCourseId()));      // students see who teaches them, like Canvas "People"
-        List<CourseInstructor> list = staff.findBySectionIdOrderByRoleAsc(sectionId);
-        Map<UUID, UserSummaryDto> names = userService.summariesById(list.stream().map(CourseInstructor::getUserId).toList());
-        return list.stream().map(ci -> toDto(ci, names.get(ci.getUserId()))).toList();
-    }
-
-    @Transactional
-    @Override
-    public CourseInstructorDto assignStaff(UUID sectionId, AssignCourseInstructorRequest r) {
-        access.requireCourseAdmin();
-        CourseSection s = section(sectionId);
-        requireOpen(course(s.getCourseId()));
-        User u = users.findById(r.userId()).filter(x -> !Boolean.TRUE.equals(x.getIsSystemUser()))
-                .orElseThrow(() -> ApiException.notFound("User"));
-        if (u.getUserType() == UserType.OBSERVER) throw ApiException.badRequest("OBSERVER_CANNOT_TEACH", "Observers cannot be course staff");
-        if (u.getUserType() == UserType.STUDENT
-                && !EnumSet.of(CourseInstructorRole.TEACHING_ASSISTANT, CourseInstructorRole.GRADER).contains(r.role())) {
-            throw ApiException.badRequest("STUDENT_ROLE_LIMIT", "A student account can only be a TEACHING_ASSISTANT or GRADER");
-        }
-        if (enrollments.findBySectionIdAndUserId(sectionId, r.userId())
-                .filter(e -> e.getEnrollmentStatus() == EnrollmentStatus.ACTIVE
-                        && EnrollmentProvisioningServiceImplementation.SEAT_TYPES.contains(e.getEnrollmentType())).isPresent()) {
-            throw ApiException.conflict("USER_IS_ENROLLED", "The user is enrolled as a student in this section");
-        }
-        if (staff.findBySectionIdAndUserId(sectionId, r.userId()).isPresent()) {
-            throw ApiException.conflict("ALREADY_STAFF", "The user is already on this section's staff");
-        }
-        if (r.dateStart() != null && r.dateEnd() != null && r.dateEnd().isBefore(r.dateStart())) {
-            throw ApiException.badRequest("INVALID_DATES", "dateEnd must be on or after dateStart");
-        }
-        CourseInstructor ci = new CourseInstructor();
-        ci.setSectionId(sectionId);
-        ci.setUserId(r.userId());
-        ci.setRole(r.role());
-        ci.setIsPrimaryInstructor(r.role() == CourseInstructorRole.PRIMARY);   // one per section (unique index)
-        ci.setDateAssigned(LocalDate.now());
-        ci.setDateStart(r.dateStart());
-        ci.setDateEnd(r.dateEnd());
-        refresher.refresh(staff.saveAndFlush(ci));
-        return toDto(ci, userService.summariesById(List.of(r.userId())).get(r.userId()));
-    }
-
-    @Transactional
-    @Override
-    public void removeStaff(UUID sectionId, UUID courseInstructorId) {
-        access.requireCourseAdmin();
-        CourseInstructor ci = staff.findById(courseInstructorId).filter(x -> x.getSectionId().equals(sectionId))
-                .orElseThrow(() -> ApiException.notFound("Staff assignment"));
-        staff.delete(ci);
-    }
-
     // ---------------------------------------------------------------- helpers
-
-    private CourseInstructorDto toDto(CourseInstructor ci, UserSummaryDto user) {
-        return sectionMapper.toDto(ci, user == null ? null : user.username(), user == null ? null : user.displayName());
-    }
 
     private static void requireOpen(Course c) {
         if (Boolean.TRUE.equals(c.getIsArchived()) || c.getCourseStatus() == CourseStatus.ARCHIVED) {

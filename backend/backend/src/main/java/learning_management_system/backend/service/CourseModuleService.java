@@ -35,13 +35,8 @@ public interface CourseModuleService {
 
     List<ModuleViewDto> reorder(UUID courseId, ReorderRequest r);
 
-    CourseModuleDto setPrerequisites(UUID moduleId, ModulePrerequisitesRequest r);
-
-    CourseModuleDto addRequirement(UUID moduleId, AddModuleRequirementRequest r);
-
-    CourseModuleDto removeRequirement(UUID moduleId, UUID requirementId);
-
     ModuleViewDto reorderItems(UUID moduleId, ReorderRequest r);
 
-    List<ModuleStudentProgressDto> studentProgress(UUID moduleId);
+    /** The module with its prerequisites and requirements (no permission check). */
+    CourseModuleDto dto(UUID moduleId);
 }

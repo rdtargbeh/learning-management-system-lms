@@ -14,9 +14,17 @@ import java.util.function.Supplier;
 @Component
 public class SystemTx {
     private final TransactionTemplate tx;
+    private final TransactionTemplate txNew;
 
     public SystemTx(PlatformTransactionManager tm) {
         this.tx = new TransactionTemplate(tm);
+        this.txNew = new TransactionTemplate(tm);
+        this.txNew.setPropagationBehavior(TransactionTemplate.PROPAGATION_REQUIRES_NEW);
+    }
+
+    /** Like platform(), but always in a separate transaction, so it works when called from inside a tenant transaction. */
+    public <T> T platformNew(Supplier<T> work) {
+        return RequestContext.runAs(RequestContext.system(), () -> txNew.execute(s -> work.get()));
     }
 
     public <T> T platform(Supplier<T> work) {

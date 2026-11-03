@@ -197,7 +197,13 @@ HANDWRITTEN_REPOS = {'users', 'user_profile', 'platform_user_profile', 'student_
                      # tenancy + identity, complete
                      'tenant_branding', 'tenant_subscription', 'tenant_user_limit', 'user_session', 'login_history',
                      'password_reset_token', 'mfa_configuration', 'email_verification_token', 'account_lock', 'audit_log',
-                     'user_accessibility_settings', 'user_preferences', 'accommodation', 'user_login'}
+                     'user_accessibility_settings', 'user_preferences', 'accommodation', 'user_login',
+                     # academic structure, complete
+                     'course_prerequisite', 'course_schedule', 'learning_outcome', 'outcome_result', 'gradebook', 'blueprint_association', 'blueprint_content_lock', 'blueprint_sync_run', 'course_navigation_item',
+                     # enrollment, complete
+                     'group_leader', 'differentiation_tag', 'differentiation_tag_member', 'observer_pairing_code',
+                     # learning content, complete
+                     'content_block', 'interactive_content', 'content_permission', 'system_resource_library', 'release_condition', 'mastery_path_rule', 'mastery_path_range', 'mastery_path_set_item', 'course_pace', 'course_pace_item'}
 import json as _json
 for d in ('entity', 'repository', 'enums'): os.makedirs(f'{OUT}/{d}', exist_ok=True)
 n = e = 0

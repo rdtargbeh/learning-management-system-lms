@@ -1,5 +1,12 @@
 package learning_management_system.backend.serviceimpl;
 
+import learning_management_system.backend.service.ItemAvailabilityService;
+import learning_management_system.backend.repository.DifferentiationTagRepository;
+import learning_management_system.backend.repository.DifferentiationTagMemberRepository;
+import learning_management_system.backend.service.BlueprintContentLockService;
+import learning_management_system.backend.enums.BlueprintContentLockObjectType;
+import learning_management_system.backend.enums.BlueprintLockAspect;
+import static learning_management_system.backend.enums.BlueprintLockAspect.*;
 import learning_management_system.backend.dto.AssignmentDto;
 import learning_management_system.backend.dto.AssignmentOverrideDto;
 import learning_management_system.backend.dto.AssignmentViewDto;
@@ -40,8 +47,8 @@ import learning_management_system.backend.repository.StudentGroupRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
 import learning_management_system.backend.service.AssignmentService;
-import learning_management_system.backend.service.ModuleProgressService;
-import learning_management_system.backend.service.ModuleProgressService.ModuleState;
+import learning_management_system.backend.service.StudentModuleProgressService;
+import learning_management_system.backend.service.StudentModuleProgressService.ModuleState;
 import learning_management_system.backend.utility.EntityRefresher;
 
 import org.springframework.stereotype.Service;
@@ -82,10 +89,19 @@ public class AssignmentServiceImplementation implements AssignmentService {
     private final StudentGroupRepository groups;
     private final GroupMemberRepository members;
     private final ModuleCompletionRequirementRepository requirements;
-    private final ModuleProgressService progress;
+    private final StudentModuleProgressService progress;
     private final CourseAccess access;
     private final AssignmentMapper assignmentMapper;
     private final EntityRefresher refresher;
+
+    private final BlueprintContentLockService blueprintLocks;
+
+    private final DifferentiationTagRepository tags;
+    private final DifferentiationTagMemberRepository tagMembers;
+
+    private final ItemAvailabilityService availability;
+
+    private final learning_management_system.backend.service.CoursePaceService paces;
 
     public AssignmentServiceImplementation(AssignmentRepository assignments, AssignmentOverrideRepository overrides,
                                            AssignmentSubmissionRepository submissions, FeedbackRepository feedback,
@@ -94,8 +110,17 @@ public class AssignmentServiceImplementation implements AssignmentService {
                                            EnrollmentRepository enrollments, GroupSetRepository groupSets,
                                            StudentGroupRepository groups, GroupMemberRepository members,
                                            ModuleCompletionRequirementRepository requirements,
-                                           ModuleProgressService progress, CourseAccess access,
-                                           AssignmentMapper assignmentMapper, EntityRefresher refresher) {
+                                           StudentModuleProgressService progress, CourseAccess access,
+                                           AssignmentMapper assignmentMapper, EntityRefresher refresher,
+            BlueprintContentLockService blueprintLocks,
+            DifferentiationTagRepository tags, DifferentiationTagMemberRepository tagMembers,
+            ItemAvailabilityService availability,
+            learning_management_system.backend.service.CoursePaceService paces) {
+        this.paces = paces;
+        this.availability = availability;
+        this.tags = tags;
+        this.tagMembers = tagMembers;
+        this.blueprintLocks = blueprintLocks;
         this.assignments = assignments;
         this.overrides = overrides;
         this.submissions = submissions;
@@ -156,7 +181,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
         List<AssignmentSubmission> mine = submissions.findByAssignmentIdAndUserIdOrderBySubmissionNumberAsc(a.getAssignmentId(), me);
         AssignmentSubmission latest = mine.isEmpty() ? null : mine.get(mine.size() - 1);
         boolean excused = mine.stream().anyMatch(s -> Boolean.TRUE.equals(s.getIsExcused()));
-        boolean handedIn = mine.stream().anyMatch(s -> s.getSubmittedAt() != null && ModuleProgressServiceImplementation.HANDED_IN.contains(s.getSubmissionStatus()));
+        boolean handedIn = mine.stream().anyMatch(s -> s.getSubmittedAt() != null && StudentModuleProgressServiceImplementation.HANDED_IN.contains(s.getSubmissionStatus()));
         LatePolicyStatus late = latest != null && latest.getLatePolicyStatus() != null ? latest.getLatePolicyStatus() : LatePolicyStatus.NONE;
         if (!handedIn && !excused && sch.due() != null && OffsetDateTime.now().isAfter(sch.due()) && ONLINE_TYPES.contains(a.getAssignmentType())) {
             late = LatePolicyStatus.MISSING;
@@ -210,6 +235,16 @@ public class AssignmentServiceImplementation implements AssignmentService {
     public AssignmentDto update(UUID assignmentId, UpdateAssignmentRequest r) {
         Assignment a = load(assignmentId);
         access.requireCourseEditor(a.getCourseId());
+        java.util.EnumSet<BlueprintLockAspect> touched = java.util.EnumSet.noneOf(BlueprintLockAspect.class);
+        if (r.assignmentTitle() != null || r.assignmentDescription() != null || r.assignmentInstructions() != null) touched.add(CONTENT);
+        if (r.pointsPossible() != null || r.gradingType() != null || r.omitFromFinalGrade() != null) touched.add(POINTS);
+        if (r.dateDue() != null || r.dateClose() != null) touched.add(DUE_DATES);
+        if (r.dateAvailable() != null) touched.add(AVAILABILITY);
+        if (r.assignmentType() != null || r.maxSubmissions() != null || r.lateSubmissionAllowed() != null || r.lateSubmissionPenaltyPercent() != null
+                || r.isAnonymousGrading() != null || r.gradeGroupIndividually() != null || r.peerReviewRequired() != null || r.peerReviewCount() != null) {
+            touched.add(SETTINGS);
+        }
+        blueprintLocks.requireEditable(a.getCourseId(), BlueprintContentLockObjectType.ASSIGNMENT, assignmentId, touched);
         assignmentMapper.updateEntity(r, a);
         if (r.assignmentType() != null) a.setSubmissionType(submissionTypeFor(r.assignmentType()));
         if (Boolean.TRUE.equals(a.getPeerReviewRequired()) && a.getPeerReviewCount() == null) a.setPeerReviewCount(1);
@@ -222,6 +257,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
     public AssignmentDto setPublished(UUID assignmentId, boolean published) {
         Assignment a = load(assignmentId);
         access.requireCourseEditor(a.getCourseId());
+        blueprintLocks.requireEditable(a.getCourseId(), BlueprintContentLockObjectType.ASSIGNMENT, assignmentId, java.util.EnumSet.of(AVAILABILITY));
         if (!published && hasStudentWork(assignmentId)) {
             throw ApiException.conflict("HAS_SUBMISSIONS", "Students have already submitted; the assignment cannot be unpublished");
         }
@@ -235,6 +271,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
     public AssignmentDto move(UUID assignmentId, MoveContentRequest r) {
         Assignment a = load(assignmentId);
         access.requireCourseEditor(a.getCourseId());
+        blueprintLocks.requireEditable(a.getCourseId(), BlueprintContentLockObjectType.ASSIGNMENT, assignmentId, java.util.EnumSet.of(SETTINGS));
         if (r.moduleId() == null) {
             requirements.deleteForAssignmentOutsideModule(assignmentId, null);
             a.setModuleId(null);
@@ -253,6 +290,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
     public void delete(UUID assignmentId) {
         Assignment a = load(assignmentId);
         access.requireCourseEditor(a.getCourseId());
+        blueprintLocks.requireEditable(a.getCourseId(), BlueprintContentLockObjectType.ASSIGNMENT, assignmentId, java.util.EnumSet.of(CONTENT));
         if (hasStudentWork(assignmentId)) {
             throw ApiException.conflict("HAS_SUBMISSIONS", "Students have already submitted; the assignment cannot be deleted");
         }
@@ -275,6 +313,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
     public AssignmentOverrideDto addOverride(UUID assignmentId, CreateAssignmentOverrideRequest r) {
         Assignment a = load(assignmentId);
         access.requireCourseEditor(a.getCourseId());
+        blueprintLocks.requireEditable(a.getCourseId(), BlueprintContentLockObjectType.ASSIGNMENT, assignmentId, java.util.EnumSet.of(DUE_DATES));
         switch (r.targetType()) {
             case "STUDENT" -> {
                 if (r.targetUserId() == null) throw ApiException.badRequest("TARGET_REQUIRED", "STUDENT overrides need targetUserId");
@@ -286,6 +325,11 @@ public class AssignmentServiceImplementation implements AssignmentService {
                 if (r.targetSectionId() == null) throw ApiException.badRequest("TARGET_REQUIRED", "SECTION overrides need targetSectionId");
                 sections.findById(r.targetSectionId()).filter(s -> s.getCourseId().equals(a.getCourseId()))
                         .orElseThrow(() -> ApiException.badRequest("SECTION_NOT_IN_COURSE", "The section does not belong to this course"));
+            }
+            case "TAG" -> {
+                if (r.targetTagId() == null) throw ApiException.badRequest("TARGET_REQUIRED", "TAG overrides need targetTagId");
+                tags.findById(r.targetTagId()).filter(t -> t.getCourseId().equals(a.getCourseId()))
+                        .orElseThrow(() -> ApiException.badRequest("TAG_NOT_IN_COURSE", "The tag does not belong to this course"));
             }
             default -> {
                 if (r.targetGroupId() == null) throw ApiException.badRequest("TARGET_REQUIRED", "GROUP overrides need targetGroupId");
@@ -299,6 +343,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
         if (!"STUDENT".equals(r.targetType())) o.setTargetUserId(null);
         if (!"SECTION".equals(r.targetType())) o.setTargetSectionId(null);
         if (!"GROUP".equals(r.targetType())) o.setTargetGroupId(null);
+        if (!"TAG".equals(r.targetType())) o.setTargetTagId(null);
         o.setCreatedBy(Access.ctx().userId());
         if (o.getDateDue() != null && o.getDateClose() != null && o.getDateClose().isBefore(o.getDateDue())) {
             throw ApiException.badRequest("INVALID_DATES", "dateClose must be on or after dateDue");
@@ -311,6 +356,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
     public void removeOverride(UUID assignmentId, UUID overrideId) {
         Assignment a = load(assignmentId);
         access.requireCourseEditor(a.getCourseId());
+        blueprintLocks.requireEditable(a.getCourseId(), BlueprintContentLockObjectType.ASSIGNMENT, assignmentId, java.util.EnumSet.of(DUE_DATES));
         AssignmentOverride o = overrides.findById(overrideId).filter(x -> assignmentId.equals(x.getAssignmentId()))
                 .orElseThrow(() -> ApiException.notFound("Override"));
         overrides.delete(o);
@@ -330,8 +376,13 @@ public class AssignmentServiceImplementation implements AssignmentService {
         OffsetDateTime available = startOfDay(a.getDateAvailable(), zone);
         OffsetDateTime due = endOfDay(a.getDateDue(), zone);
         OffsetDateTime close = endOfDay(a.getDateClose(), zone);
+        LocalDate paced = paces.pacedDue(a.getCourseId(), a.getAssignmentId(), userId);
+        if (paced != null) {                                    // course pacing sets the student's own due date
+            due = endOfDay(paced, zone);
+            if (close != null && close.isBefore(due)) close = due;
+        }
         Integer max = a.getMaxSubmissions();
-        List<AssignmentOverride> mine = applicable(a, userId);
+        List<AssignmentOverride> mine = paced != null ? List.of() : applicable(a, userId);
         if (!mine.isEmpty()) {
             available = pick(mine.stream().map(AssignmentOverride::getDateAvailable).filter(Objects::nonNull).min(Comparator.naturalOrder()).orElse(null), available);
             due = pick(mine.stream().map(AssignmentOverride::getDateDue).filter(Objects::nonNull).max(Comparator.naturalOrder()).orElse(null), due);
@@ -350,6 +401,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
             case "STUDENT" -> userId.equals(o.getTargetUserId());
             case "SECTION" -> mySections.contains(o.getTargetSectionId());
             case "GROUP" -> members.findByGroupIdAndUserId(o.getTargetGroupId(), userId).filter(m -> Boolean.TRUE.equals(m.getIsActive())).isPresent();
+            case "TAG" -> tagMembers.existsByTagIdAndUserId(o.getTargetTagId(), userId);
             default -> false;
         }).toList();
     }
@@ -363,6 +415,9 @@ public class AssignmentServiceImplementation implements AssignmentService {
         if (!ONLINE_TYPES.contains(a.getAssignmentType())) return "This assignment is not handed in online here";
         String moduleLock = progress.moduleLockReason(a.getCourseId(), a.getModuleId(), a.getAssignmentId(), userId);
         if (moduleLock != null) return moduleLock;
+        String released = availability.lockReason(a.getCourseId(), learning_management_system.backend.enums.TargetType.ASSIGNMENT,
+                a.getAssignmentId(), a.getModuleId(), userId);
+        if (released != null) return released;
         Schedule s = schedule(a, userId);
         OffsetDateTime now = OffsetDateTime.now();
         if (s.available() != null && now.isBefore(s.available())) return "Available from " + s.available();
@@ -375,7 +430,7 @@ public class AssignmentServiceImplementation implements AssignmentService {
     @Override
     public int attemptsUsed(UUID assignmentId, UUID userId) {
         return (int) submissions.findByAssignmentIdAndUserIdOrderBySubmissionNumberAsc(assignmentId, userId).stream()
-                .filter(s -> ModuleProgressServiceImplementation.HANDED_IN.contains(s.getSubmissionStatus()) && s.getSubmittedAt() != null)
+                .filter(s -> StudentModuleProgressServiceImplementation.HANDED_IN.contains(s.getSubmissionStatus()) && s.getSubmittedAt() != null)
                 .count();
     }
 

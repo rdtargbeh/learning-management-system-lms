@@ -282,7 +282,7 @@ CREATE TABLE blueprint_sync_run (
     sync_comment TEXT,
     include_course_settings BOOLEAN NOT NULL DEFAULT FALSE,
     notify_users BOOLEAN NOT NULL DEFAULT FALSE,
-    run_status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',
+    run_status VARCHAR(30) NOT NULL DEFAULT 'QUEUED',
     changes JSONB,
     courses_synced INT NOT NULL DEFAULT 0,
     exceptions JSONB,

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.UUID;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
 public interface OutcomeResultRepository extends JpaRepository<OutcomeResult, UUID> {
+    boolean existsByOutcomeId(UUID outcomeId);
 }

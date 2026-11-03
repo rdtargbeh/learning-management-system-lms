@@ -10,7 +10,7 @@ import java.util.UUID;
  * Give one student (STUDENT), section (SECTION) or group (GROUP) their own dates or extra attempts. When several
  * overrides apply to a student, the latest dates and the most attempts win.
  */
-public record CreateAssignmentOverrideRequest(@NotNull @Pattern(regexp = "STUDENT|SECTION|GROUP") String targetType, UUID targetUserId,
-                                              UUID targetSectionId, UUID targetGroupId, OffsetDateTime dateAvailable,
+public record CreateAssignmentOverrideRequest(@NotNull @Pattern(regexp = "STUDENT|SECTION|GROUP|TAG") String targetType, UUID targetUserId,
+                                              UUID targetSectionId, UUID targetGroupId, UUID targetTagId, OffsetDateTime dateAvailable,
                                               OffsetDateTime dateDue, OffsetDateTime dateClose, @Positive Integer maxAttemptsOverride,
                                               String reason) {}

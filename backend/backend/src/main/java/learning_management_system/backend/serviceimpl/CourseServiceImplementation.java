@@ -1,5 +1,9 @@
 package learning_management_system.backend.serviceimpl;
 
+import learning_management_system.backend.enums.CourseKind;
+import learning_management_system.backend.repository.BlueprintAssociationRepository;
+import learning_management_system.backend.service.BlueprintContentLockService;
+import learning_management_system.backend.enums.BlueprintContentLockObjectType;
 import learning_management_system.backend.dto.AssignCourseInstructorRequest;
 import learning_management_system.backend.dto.CourseDto;
 import learning_management_system.backend.dto.CourseSectionDto;
@@ -28,6 +32,7 @@ import learning_management_system.backend.repository.OrgUnitRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
 import learning_management_system.backend.security.Permissions;
+import learning_management_system.backend.service.CourseInstructorService;
 import learning_management_system.backend.service.CourseSectionService;
 import learning_management_system.backend.service.CourseService;
 import learning_management_system.backend.utility.EntityRefresher;
@@ -61,15 +66,22 @@ public class CourseServiceImplementation implements CourseService {
     private final CourseCategoryRepository categories;
     private final OrgUnitRepository orgUnits;
     private final CourseSectionService sectionService;
+    private final CourseInstructorService staffService;
     private final CourseAccess access;
     private final CourseMapper courseMapper;
     private final EntityRefresher refresher;
 
+    private final BlueprintAssociationRepository blueprints;
+    private final BlueprintContentLockService blueprintLocks;
+
     public CourseServiceImplementation(CourseRepository courses, CourseSectionRepository sections,
                                        CourseInstructorRepository staff, EnrollmentRepository enrollments,
                                        AcademicTermRepository terms, CourseCategoryRepository categories,
-                                       OrgUnitRepository orgUnits, CourseSectionService sectionService, CourseAccess access,
-                                       CourseMapper courseMapper, EntityRefresher refresher) {
+                                       OrgUnitRepository orgUnits, CourseSectionService sectionService, CourseInstructorService staffService, CourseAccess access,
+                                       CourseMapper courseMapper, EntityRefresher refresher,
+                                       BlueprintAssociationRepository blueprints, BlueprintContentLockService blueprintLocks) {
+        this.blueprints = blueprints;
+        this.blueprintLocks = blueprintLocks;
         this.courses = courses;
         this.sections = sections;
         this.staff = staff;
@@ -78,6 +90,7 @@ public class CourseServiceImplementation implements CourseService {
         this.categories = categories;
         this.orgUnits = orgUnits;
         this.sectionService = sectionService;
+        this.staffService = staffService;
         this.access = access;
         this.courseMapper = courseMapper;
         this.refresher = refresher;
@@ -101,7 +114,7 @@ public class CourseServiceImplementation implements CourseService {
             CourseSectionDto s = sectionService.create(c.getCourseId(), new CreateCourseSectionRequest(
                     "01", null, null, r.defaultSectionCapacity(), null, null, null, null, null, null));
             if (r.instructorUserId() != null) {
-                sectionService.assignStaff(s.sectionId(),
+                staffService.assign(s.sectionId(),
                         new AssignCourseInstructorRequest(r.instructorUserId(), CourseInstructorRole.PRIMARY, null, null));
             }
         }
@@ -176,6 +189,21 @@ public class CourseServiceImplementation implements CourseService {
             throw ApiException.forbidden("Code, term, category, org unit, SIS id, credits, seats and kind need " + Permissions.COURSE_MANAGE);
         }
         validateReferences(r.termId(), r.categoryId(), r.orgUnitId());
+        if (r.courseKind() != null && r.courseKind() != c.getCourseKind()) {
+            if (c.getCourseKind() == CourseKind.BLUEPRINT && blueprints.existsByBlueprintCourseIdAndIsActiveTrue(courseId)) {
+                throw ApiException.conflict("BLUEPRINT_IN_USE", "Remove the blueprint's associated courses before changing its kind");
+            }
+            if (blueprints.findFirstByAssociatedCourseIdAndIsActiveTrue(courseId).isPresent()) {
+                throw ApiException.conflict("HAS_BLUEPRINT", "The course follows a blueprint; remove the association first");
+            }
+        }
+        boolean settingsChange = r.courseDescription() != null || r.syllabusHtml() != null || r.homePageType() != null
+                || r.courseImageUrl() != null || r.isPublicSyllabus() != null || r.contentLicense() != null
+                || r.gradeCalculationMethod() != null || r.defaultPostPolicy() != null || r.timeZone() != null;
+        if (settingsChange) {
+            blueprintLocks.requireEditable(courseId, BlueprintContentLockObjectType.SETTINGS, null,
+                    java.util.EnumSet.of(learning_management_system.backend.enums.BlueprintLockAspect.CONTENT));
+        }
         courseMapper.updateEntity(r, c);
         validateDates(c);
         return view(courses.saveAndFlush(c));

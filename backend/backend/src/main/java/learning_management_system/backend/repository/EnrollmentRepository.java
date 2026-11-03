@@ -60,4 +60,12 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
         order by e.dateEnrolled
         """)
     List<Enrollment> activeInCourseOfTypes(@Param("courseId") UUID courseId, @Param("types") Collection<EnrollmentType> types);
+
+    /** The user's enrollments in any section of a course with one of these statuses (prerequisite checks). */
+    @Query("""
+        select e from Enrollment e, CourseSection s
+        where e.sectionId = s.sectionId and s.courseId = :courseId and e.userId = :userId and e.enrollmentStatus in :statuses
+        """)
+    List<Enrollment> inCourseWithStatuses(@Param("courseId") UUID courseId, @Param("userId") UUID userId,
+                                          @Param("statuses") Collection<EnrollmentStatus> statuses);
 }

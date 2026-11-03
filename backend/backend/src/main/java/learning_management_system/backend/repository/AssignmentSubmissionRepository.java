@@ -34,4 +34,6 @@ public interface AssignmentSubmissionRepository extends JpaRepository<Assignment
         where s.assignmentId = :a and s.submissionStatus = learning_management_system.backend.enums.AssignmentSubmissionStatus.GRADED
         """)
     int postGrades(@Param("a") UUID assignmentId);
+
+    boolean existsByGroupId(UUID groupId);
 }

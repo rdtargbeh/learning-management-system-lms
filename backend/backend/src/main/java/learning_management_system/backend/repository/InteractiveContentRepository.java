@@ -4,9 +4,10 @@ import learning_management_system.backend.entity.InteractiveContent;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Optional;
 import java.util.UUID;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
 public interface InteractiveContentRepository extends JpaRepository<InteractiveContent, UUID> {
+    Optional<InteractiveContent> findByContentId(UUID contentId);
 }

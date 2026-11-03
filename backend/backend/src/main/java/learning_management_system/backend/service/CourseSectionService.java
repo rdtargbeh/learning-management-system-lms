@@ -29,10 +29,4 @@ public interface CourseSectionService {
 
     /** Moves a cross-listed section back to the course it came from. */
     CourseSectionDto uncrosslist(UUID sectionId);
-
-    List<CourseInstructorDto> staff(UUID sectionId);
-
-    CourseInstructorDto assignStaff(UUID sectionId, AssignCourseInstructorRequest r);
-
-    void removeStaff(UUID sectionId, UUID courseInstructorId);
 }

@@ -47,19 +47,4 @@ public class CourseSectionController {
 
     @PostMapping("/sections/{sectionId}/uncrosslist")
     public CourseSectionDto uncrosslist(@PathVariable UUID sectionId) { return sections.uncrosslist(sectionId); }
-
-    @GetMapping("/sections/{sectionId}/staff")
-    public List<CourseInstructorDto> staff(@PathVariable UUID sectionId) { return sections.staff(sectionId); }
-
-    @PostMapping("/sections/{sectionId}/staff")
-    @ResponseStatus(HttpStatus.CREATED)
-    public CourseInstructorDto assignStaff(@PathVariable UUID sectionId, @Valid @RequestBody AssignCourseInstructorRequest r) {
-        return sections.assignStaff(sectionId, r);
-    }
-
-    @DeleteMapping("/sections/{sectionId}/staff/{courseInstructorId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void removeStaff(@PathVariable UUID sectionId, @PathVariable UUID courseInstructorId) {
-        sections.removeStaff(sectionId, courseInstructorId);
-    }
 }

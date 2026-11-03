@@ -176,4 +176,3 @@ CREATE POLICY rls_tenant_subscription_tenant ON tenant_subscription FOR ALL USIN
 ALTER TABLE tenant_user_limit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tenant_user_limit FORCE ROW LEVEL SECURITY;
 CREATE POLICY rls_tenant_user_limit_tenant ON tenant_user_limit FOR ALL USING (tenant_id = app_current_tenant_id() OR app_is_platform_admin()) WITH CHECK (tenant_id = app_current_tenant_id() OR app_is_platform_admin());
-

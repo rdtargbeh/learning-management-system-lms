@@ -60,28 +60,9 @@ public class CourseModuleController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID moduleId) { modules.delete(moduleId); }
 
-    @PutMapping("/modules/{moduleId}/prerequisites")
-    public CourseModuleDto prerequisites(@PathVariable UUID moduleId, @Valid @RequestBody ModulePrerequisitesRequest r) {
-        return modules.setPrerequisites(moduleId, r);
-    }
-
-    @PostMapping("/modules/{moduleId}/requirements")
-    @ResponseStatus(HttpStatus.CREATED)
-    public CourseModuleDto addRequirement(@PathVariable UUID moduleId, @Valid @RequestBody AddModuleRequirementRequest r) {
-        return modules.addRequirement(moduleId, r);
-    }
-
-    @DeleteMapping("/modules/{moduleId}/requirements/{requirementId}")
-    public CourseModuleDto removeRequirement(@PathVariable UUID moduleId, @PathVariable UUID requirementId) {
-        return modules.removeRequirement(moduleId, requirementId);
-    }
-
     @PutMapping("/modules/{moduleId}/items/order")
     public ModuleViewDto reorderItems(@PathVariable UUID moduleId, @Valid @RequestBody ReorderRequest r) {
         return modules.reorderItems(moduleId, r);
     }
 
-    /** Every student's progress in the module (course staff). */
-    @GetMapping("/modules/{moduleId}/progress")
-    public List<ModuleStudentProgressDto> progress(@PathVariable UUID moduleId) { return modules.studentProgress(moduleId); }
 }

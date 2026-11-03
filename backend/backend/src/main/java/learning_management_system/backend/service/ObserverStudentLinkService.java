@@ -16,4 +16,10 @@ public interface ObserverStudentLinkService {
     List<ObserverStudentLinkDto> forObserver(UUID observerUserId);
 
     ObserverStudentLinkDto revoke(UUID linkId);
+
+    /**
+     * Internal (no permission check): links an observer to a student, re-activating a revoked link. 409 ALREADY_LINKED
+     * when the link is already active.
+     */
+    ObserverStudentLinkDto pair(UUID observerUserId, UUID studentUserId, learning_management_system.backend.enums.Relationship relationship);
 }

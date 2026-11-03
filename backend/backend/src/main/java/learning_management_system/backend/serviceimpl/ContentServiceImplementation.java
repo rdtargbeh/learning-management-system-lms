@@ -1,5 +1,12 @@
 package learning_management_system.backend.serviceimpl;
 
+import learning_management_system.backend.service.ItemAvailabilityService;
+import learning_management_system.backend.service.ContentPermissionService;
+import learning_management_system.backend.service.VideoLectureService;
+import learning_management_system.backend.service.BlueprintContentLockService;
+import learning_management_system.backend.enums.BlueprintContentLockObjectType;
+import learning_management_system.backend.enums.BlueprintLockAspect;
+import static learning_management_system.backend.enums.BlueprintLockAspect.*;
 import learning_management_system.backend.dto.ContentDto;
 import learning_management_system.backend.dto.ContentProgressDto;
 import learning_management_system.backend.dto.CreateContentRequest;
@@ -29,8 +36,8 @@ import learning_management_system.backend.security.CourseAccess;
 import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.service.ContentService;
 import learning_management_system.backend.service.ContentTypeService;
-import learning_management_system.backend.service.ModuleProgressService;
-import learning_management_system.backend.service.ModuleProgressService.ModuleState;
+import learning_management_system.backend.service.StudentModuleProgressService;
+import learning_management_system.backend.service.StudentModuleProgressService.ModuleState;
 import learning_management_system.backend.utility.EntityRefresher;
 
 import org.springframework.stereotype.Service;
@@ -54,18 +61,34 @@ public class ContentServiceImplementation implements ContentService {
     private final ModuleCompletionRequirementRepository requirements;
     private final StudentContentProgressRepository contentProgress;
     private final ContentTypeService typeService;
-    private final ModuleProgressService progress;
+    private final StudentModuleProgressService progress;
     private final CourseAccess access;
     private final ContentMapper contentMapper;
     private final EntityRefresher refresher;
+
+    private final BlueprintContentLockService blueprintLocks;
+
+    private final VideoLectureService videoService;
+
+    private final ContentPermissionService permissions;
+
+    private final ItemAvailabilityService availability;
 
     public ContentServiceImplementation(ContentRepository contents, AssignmentRepository assignments,
                                         ContentTypeRepository types, VideoLectureRepository videos,
                                         CourseRepository courses, CourseModuleRepository modules,
                                         ModuleCompletionRequirementRepository requirements,
                                         StudentContentProgressRepository contentProgress, ContentTypeService typeService,
-                                        ModuleProgressService progress, CourseAccess access, ContentMapper contentMapper,
-                                        EntityRefresher refresher) {
+                                        StudentModuleProgressService progress, CourseAccess access, ContentMapper contentMapper,
+                                        EntityRefresher refresher,
+            BlueprintContentLockService blueprintLocks,
+            VideoLectureService videoService,
+            ContentPermissionService permissions,
+            ItemAvailabilityService availability) {
+        this.availability = availability;
+        this.permissions = permissions;
+        this.videoService = videoService;
+        this.blueprintLocks = blueprintLocks;
         this.contents = contents;
         this.assignments = assignments;
         this.types = types;
@@ -147,7 +170,7 @@ public class ContentServiceImplementation implements ContentService {
             x.setDisplayOrder(nextOrder(r.moduleId()));
         }
         refresher.refresh(contents.saveAndFlush(x));
-        if (r.video() != null) saveVideo(x, r.video());
+        if (r.video() != null) videoService.saveFor(x, r.video());
         else if ("VIDEO".equals(type.getTypeCode())) throw ApiException.badRequest("VIDEO_REQUIRED", "A VIDEO item needs video details");
         if (Boolean.TRUE.equals(r.isFrontPage())) makeFrontPage(x);
         return fullDto(load(x.getContentId()));
@@ -161,10 +184,15 @@ public class ContentServiceImplementation implements ContentService {
         boolean editor = Access.hasTenantPermission(Permissions.COURSE_MANAGE)
                 || access.isCourseTeacher(c.getCourseId());
         if (!editor) requireStudentEditable(x, c, r);
+        java.util.EnumSet<BlueprintLockAspect> touched = java.util.EnumSet.noneOf(BlueprintLockAspect.class);
+        if (r.contentTitle() != null || r.contentDescription() != null || r.contentBody() != null || r.contentHtml() != null || r.video() != null) touched.add(CONTENT);
+        if (r.dateStart() != null || r.dateEnd() != null) touched.add(AVAILABILITY);
+        if (r.estimatedDurationMinutes() != null || r.accessLevel() != null || r.editingRoles() != null || r.isLocked() != null || r.isFrontPage() != null) touched.add(SETTINGS);
+        blueprintLocks.requireEditable(x.getCourseId(), BlueprintContentLockObjectType.CONTENT, contentId, touched);
         validateDates(r.dateStart() != null ? r.dateStart() : x.getDateStart(), r.dateEnd() != null ? r.dateEnd() : x.getDateEnd());
         contentMapper.updateEntity(r, x);
         contents.saveAndFlush(x);
-        if (r.video() != null) saveVideo(x, r.video());
+        if (r.video() != null) videoService.saveFor(x, r.video());
         if (Boolean.TRUE.equals(r.isFrontPage())) makeFrontPage(x);
         else if (Boolean.FALSE.equals(r.isFrontPage()) && Boolean.TRUE.equals(x.getIsFrontPage())) {
             x.setIsFrontPage(false);
@@ -190,6 +218,7 @@ public class ContentServiceImplementation implements ContentService {
     public ContentDto setPublished(UUID contentId, boolean published) {
         Content x = load(contentId);
         access.requireCourseEditor(x.getCourseId());
+        blueprintLocks.requireEditable(x.getCourseId(), BlueprintContentLockObjectType.CONTENT, contentId, java.util.EnumSet.of(AVAILABILITY));
         if (!published && Boolean.TRUE.equals(x.getIsFrontPage())) {
             throw ApiException.conflict("FRONT_PAGE", "The front page cannot be unpublished; choose another front page first");
         }
@@ -203,6 +232,7 @@ public class ContentServiceImplementation implements ContentService {
     public ContentDto move(UUID contentId, MoveContentRequest r) {
         Content x = load(contentId);
         access.requireCourseEditor(x.getCourseId());
+        blueprintLocks.requireEditable(x.getCourseId(), BlueprintContentLockObjectType.CONTENT, contentId, java.util.EnumSet.of(SETTINGS));
         if (r.moduleId() == null) {
             requirements.deleteByContentId(contentId);
             x.setModuleId(null);
@@ -223,6 +253,7 @@ public class ContentServiceImplementation implements ContentService {
     public void delete(UUID contentId) {
         Content x = load(contentId);
         access.requireCourseEditor(x.getCourseId());
+        blueprintLocks.requireEditable(x.getCourseId(), BlueprintContentLockObjectType.CONTENT, contentId, java.util.EnumSet.of(CONTENT));
         if (Boolean.TRUE.equals(x.getIsFrontPage())) {
             throw ApiException.conflict("FRONT_PAGE", "The front page cannot be deleted; choose another front page first");
         }
@@ -259,19 +290,25 @@ public class ContentServiceImplementation implements ContentService {
 
     // ---------------------------------------------------------------- helpers
 
-    /** Published, not instructor-only, and (if in a module) in a published module the student can see. */
-    private static boolean visibleToStudent(Content x, Map<UUID, ModuleState> states) {
-        if (!Boolean.TRUE.equals(x.getIsPublished()) || !ModuleProgressServiceImplementation.studentVisible(x)) return false;
+    /** Published, viewable under the item's permissions (RESTRICTED needs a grant), and (if in a module) in a published module the student can see. */
+    private boolean visibleToStudent(Content x, Map<UUID, ModuleState> states) {
+        if (!Boolean.TRUE.equals(x.getIsPublished()) || !permissions.canView(x, Access.ctx().userId())) return false;
         return x.getModuleId() == null || states.containsKey(x.getModuleId());
     }
 
-    private static String lockReason(Content x, Map<UUID, ModuleState> states) {
+    private String lockReason(Content x, Map<UUID, ModuleState> states) {
         LocalDate today = LocalDate.now();
         if (x.getDateStart() != null && today.isBefore(x.getDateStart())) return "Available from " + x.getDateStart();
         if (x.getDateEnd() != null && today.isAfter(x.getDateEnd())) return "Closed on " + x.getDateEnd();
-        if (x.getModuleId() == null) return null;
-        ModuleState s = states.get(x.getModuleId());
-        return s == null ? "Not available" : s.lockedItems().get(x.getContentId());
+        if (x.getModuleId() != null) {
+            ModuleState s = states.get(x.getModuleId());
+            if (s == null) return "Not available";
+            String locked = s.lockedItems().get(x.getContentId());
+            if (locked != null) return locked;
+        }
+        // release conditions and mastery paths
+        return availability.lockReason(x.getCourseId(), learning_management_system.backend.enums.TargetType.CONTENT, x.getContentId(),
+                x.getModuleId(), Access.ctx().userId());
     }
 
     private void makeFrontPage(Content x) {
@@ -287,17 +324,6 @@ public class ContentServiceImplementation implements ContentService {
         contents.saveAndFlush(fresh);
     }
 
-    private void saveVideo(Content x, VideoLectureDto d) {
-        VideoLecture v = videos.findFirstByContentId(x.getContentId()).orElse(null);
-        if (v == null) {
-            if (d.videoUrl() == null || d.videoUrl().isBlank()) throw ApiException.badRequest("VIDEO_URL_REQUIRED", "video.videoUrl is required");
-            v = contentMapper.toEntity(d);
-            v.setContentId(x.getContentId());
-        } else {
-            contentMapper.updateEntity(d, v);
-        }
-        videos.saveAndFlush(v);
-    }
 
     /** Content and assignments share one order inside a module: new items go after both. */
     private int nextOrder(UUID moduleId) {

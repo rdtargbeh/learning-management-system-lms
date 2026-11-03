@@ -29,7 +29,7 @@ import learning_management_system.backend.repository.ModuleCompletionRequirement
 import learning_management_system.backend.repository.ModulePrerequisiteRepository;
 import learning_management_system.backend.repository.StudentContentProgressRepository;
 import learning_management_system.backend.repository.StudentModuleProgressRepository;
-import learning_management_system.backend.service.ModuleProgressService;
+import learning_management_system.backend.service.StudentModuleProgressService;
 import learning_management_system.backend.service.UserService;
 
 import org.springframework.stereotype.Service;
@@ -51,7 +51,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-public class ModuleProgressServiceImplementation implements ModuleProgressService {
+public class StudentModuleProgressServiceImplementation implements StudentModuleProgressService {
     /** Submission states that count as "handed in". */
     static final Set<AssignmentSubmissionStatus> HANDED_IN =
             EnumSet.of(AssignmentSubmissionStatus.SUBMITTED, AssignmentSubmissionStatus.GRADED, AssignmentSubmissionStatus.RETURNED);
@@ -69,13 +69,17 @@ public class ModuleProgressServiceImplementation implements ModuleProgressServic
     private final UserService userService;
     private final ObjectMapper json;
 
-    public ModuleProgressServiceImplementation(CourseModuleRepository modules, ModulePrerequisiteRepository prerequisites,
+    private final learning_management_system.backend.security.CourseAccess access;
+
+    public StudentModuleProgressServiceImplementation(CourseModuleRepository modules, ModulePrerequisiteRepository prerequisites,
                                                ModuleCompletionRequirementRepository requirements,
                                                ContentRepository contents, AssignmentRepository assignments,
                                                AssignmentSubmissionRepository submissions, FeedbackRepository feedback,
                                                StudentContentProgressRepository contentProgress,
                                                StudentModuleProgressRepository moduleProgress,
-                                               EnrollmentRepository enrollments, UserService userService, ObjectMapper json) {
+                                               EnrollmentRepository enrollments, UserService userService, ObjectMapper json,
+                                               learning_management_system.backend.security.CourseAccess access) {
+        this.access = access;
         this.modules = modules;
         this.prerequisites = prerequisites;
         this.requirements = requirements;
@@ -349,9 +353,12 @@ public class ModuleProgressServiceImplementation implements ModuleProgressServic
 
     // ---------------------------------------------------------------- teacher view
 
+    @org.springframework.transaction.annotation.Transactional
     @Override
     public List<ModuleStudentProgressDto> moduleProgress(UUID moduleId) {
         CourseModule m = modules.findById(moduleId).orElseThrow(() -> ApiException.notFound("Module"));
+        learning_management_system.backend.security.Access.requireTenant();
+        if (!access.canSeeEverything() && !access.isCourseStaff(m.getCourseId())) throw ApiException.forbidden("Only course staff can see student progress");
         CourseData d = load(m.getCourseId());
         List<Enrollment> students = enrollments.activeInCourseOfTypes(m.getCourseId(), EnrollmentProvisioningServiceImplementation.SEAT_TYPES);
         Map<UUID, Set<UUID>> sectionsByUser = new HashMap<>();

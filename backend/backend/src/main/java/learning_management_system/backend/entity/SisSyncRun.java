@@ -48,7 +48,7 @@ public class SisSyncRun implements TenantScoped {
     private SyncType syncType;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "run_status", nullable = false, length = 20)
+    @Column(name = "run_status", nullable = false, length = 30)
     private SisSyncRunStatus runStatus;
 
     @Column(name = "source_file_id")

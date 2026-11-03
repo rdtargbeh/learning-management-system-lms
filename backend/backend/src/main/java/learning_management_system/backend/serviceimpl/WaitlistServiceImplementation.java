@@ -23,6 +23,7 @@ import learning_management_system.backend.repository.UserRepository;
 import learning_management_system.backend.repository.WaitlistRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
+import learning_management_system.backend.service.CoursePrerequisiteService;
 import learning_management_system.backend.service.EnrollmentProvisioningService;
 import learning_management_system.backend.service.UserService;
 import learning_management_system.backend.service.WaitlistService;
@@ -48,10 +49,14 @@ public class WaitlistServiceImplementation implements WaitlistService {
     private final CourseAccess access;
     private final EnrollmentMapper enrollmentMapper;
 
+    private final CoursePrerequisiteService prerequisites;
+
     public WaitlistServiceImplementation(WaitlistRepository waitlist, CourseRepository courses,
                                          CourseSectionRepository sections, EnrollmentRepository enrollments,
                                          UserRepository users, EnrollmentProvisioningService provisioning,
-                                         UserService userService, CourseAccess access, EnrollmentMapper enrollmentMapper) {
+                                         UserService userService, CourseAccess access, EnrollmentMapper enrollmentMapper,
+                                           CoursePrerequisiteService prerequisites) {
+        this.prerequisites = prerequisites;
         this.waitlist = waitlist;
         this.courses = courses;
         this.sections = sections;
@@ -98,6 +103,7 @@ public class WaitlistServiceImplementation implements WaitlistService {
         if (enrollments.existsBySectionIdAndUserIdAndEnrollmentStatus(sectionId, userId, EnrollmentStatus.ACTIVE)) {
             throw ApiException.conflict("ALREADY_ENROLLED", "The user is already enrolled in this section");
         }
+        prerequisites.requireMet(c.getCourseId(), userId);
         Integer free = provisioning.openSeats(s);
         if (free == null || free > 0) throw ApiException.conflict("SEATS_AVAILABLE", "The section has free seats; enroll instead");
         Waitlist w = waitlist.findBySectionIdAndUserId(sectionId, userId).orElse(null);

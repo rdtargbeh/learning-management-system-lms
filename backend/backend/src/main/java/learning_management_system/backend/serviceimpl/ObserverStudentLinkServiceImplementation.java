@@ -78,4 +78,22 @@ public class ObserverStudentLinkServiceImplementation implements ObserverStudent
         l.setDateRevoked(OffsetDateTime.now());
         return linkMapper.toDto(links.save(l));
     }
+
+    @Override
+    public ObserverStudentLinkDto pair(UUID observerUserId, UUID studentUserId, Relationship relationship) {
+        ObserverStudentLink l = links.findByObserverUserIdAndStudentUserId(observerUserId, studentUserId).orElse(null);
+        if (l != null && l.getLinkStatus() == LinkStatus.ACTIVE) throw ApiException.conflict("ALREADY_LINKED", "You already follow this student");
+        if (l == null) {
+            l = new ObserverStudentLink();
+            l.setObserverUserId(observerUserId);
+            l.setStudentUserId(studentUserId);
+            l.setAccessLevel(ObserverStudentLinkAccessLevel.VIEW_COURSES);
+        }
+        l.setRelationship(relationship == null ? Relationship.PARENT : relationship);
+        l.setLinkStatus(LinkStatus.ACTIVE);
+        l.setDateRevoked(null);
+        l.setDateLinked(OffsetDateTime.now());
+        l.setCreatedBy(observerUserId);
+        return linkMapper.toDto(links.saveAndFlush(l));
+    }
 }

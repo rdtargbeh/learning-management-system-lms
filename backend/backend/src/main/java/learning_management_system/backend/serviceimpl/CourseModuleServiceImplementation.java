@@ -1,5 +1,11 @@
 package learning_management_system.backend.serviceimpl;
 
+import learning_management_system.backend.service.ItemAvailabilityService;
+import learning_management_system.backend.service.ContentPermissionService;
+import learning_management_system.backend.service.BlueprintContentLockService;
+import learning_management_system.backend.enums.BlueprintContentLockObjectType;
+import learning_management_system.backend.enums.BlueprintLockAspect;
+import static learning_management_system.backend.enums.BlueprintLockAspect.*;
 import learning_management_system.backend.dto.AddModuleRequirementRequest;
 import learning_management_system.backend.dto.CourseModuleDto;
 import learning_management_system.backend.dto.CreateCourseModuleRequest;
@@ -32,8 +38,8 @@ import learning_management_system.backend.repository.ModulePrerequisiteRepositor
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
 import learning_management_system.backend.service.CourseModuleService;
-import learning_management_system.backend.service.ModuleProgressService;
-import learning_management_system.backend.service.ModuleProgressService.ModuleState;
+import learning_management_system.backend.service.StudentModuleProgressService;
+import learning_management_system.backend.service.StudentModuleProgressService.ModuleState;
 import learning_management_system.backend.utility.EntityRefresher;
 
 import org.springframework.stereotype.Service;
@@ -54,9 +60,9 @@ import java.util.stream.Collectors;
 
 @Service
 public class CourseModuleServiceImplementation implements CourseModuleService {
-    private static final Set<ModuleCompletionRequirementType> CONTENT_REQUIREMENTS =
+    static final Set<ModuleCompletionRequirementType> CONTENT_REQUIREMENTS =
             EnumSet.of(ModuleCompletionRequirementType.VIEW, ModuleCompletionRequirementType.MARK_DONE);
-    private static final Set<ModuleCompletionRequirementType> ASSIGNMENT_REQUIREMENTS =
+    static final Set<ModuleCompletionRequirementType> ASSIGNMENT_REQUIREMENTS =
             EnumSet.of(ModuleCompletionRequirementType.SUBMIT, ModuleCompletionRequirementType.MIN_SCORE);
 
     private final CourseRepository courses;
@@ -67,17 +73,29 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     private final ContentRepository contents;
     private final AssignmentRepository assignments;
     private final ContentTypeRepository types;
-    private final ModuleProgressService progress;
+    private final StudentModuleProgressService progress;
     private final CourseAccess access;
     private final CourseModuleMapper moduleMapper;
     private final EntityRefresher refresher;
+
+    private final BlueprintContentLockService blueprintLocks;
+
+    private final ContentPermissionService contentPermissions;
+
+    private final ItemAvailabilityService availability;
 
     public CourseModuleServiceImplementation(CourseRepository courses, CourseSectionRepository sections,
                                              CourseModuleRepository modules, ModulePrerequisiteRepository prerequisites,
                                              ModuleCompletionRequirementRepository requirements, ContentRepository contents,
                                              AssignmentRepository assignments, ContentTypeRepository types,
-                                             ModuleProgressService progress, CourseAccess access,
-                                             CourseModuleMapper moduleMapper, EntityRefresher refresher) {
+                                             StudentModuleProgressService progress, CourseAccess access,
+                                             CourseModuleMapper moduleMapper, EntityRefresher refresher,
+            BlueprintContentLockService blueprintLocks,
+            ContentPermissionService contentPermissions,
+            ItemAvailabilityService availability) {
+        this.availability = availability;
+        this.contentPermissions = contentPermissions;
+        this.blueprintLocks = blueprintLocks;
         this.courses = courses;
         this.sections = sections;
         this.modules = modules;
@@ -133,11 +151,37 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
         for (CourseModule m : list) {
             ModuleState s = states.get(m.getModuleId());
             if (!staff && s == null) continue;                          // unpublished, or for another section
+            if (!staff && s.lockReason() == null) {
+                String cond = availability.lockReason(c.getCourseId(), learning_management_system.backend.enums.TargetType.MODULE, m.getModuleId(),
+                        null, Access.ctx().userId());
+                if (cond != null) {                                       // release conditions lock the whole module
+                    Map<UUID, String> all = new java.util.LinkedHashMap<>();
+                    items.getOrDefault(m.getModuleId(), List.of()).forEach(x -> all.put(x.getContentId(), cond));
+                    work.getOrDefault(m.getModuleId(), List.of()).forEach(x -> all.put(x.getAssignmentId(), cond));
+                    s = new ModuleState(s.moduleId(), learning_management_system.backend.enums.ProgressStatus.LOCKED, cond,
+                            s.metRequirementIds(), s.completedItemIds(), all);
+                } else {
+                    Map<UUID, String> extra = new java.util.LinkedHashMap<>(s.lockedItems());
+                    for (Content x : items.getOrDefault(m.getModuleId(), List.of())) {
+                        String r = availability.lockReason(c.getCourseId(), learning_management_system.backend.enums.TargetType.CONTENT,
+                                x.getContentId(), null, Access.ctx().userId());
+                        if (r != null) extra.putIfAbsent(x.getContentId(), r);
+                    }
+                    for (Assignment x : work.getOrDefault(m.getModuleId(), List.of())) {
+                        String r = availability.lockReason(c.getCourseId(), learning_management_system.backend.enums.TargetType.ASSIGNMENT,
+                                x.getAssignmentId(), null, Access.ctx().userId());
+                        if (r != null) extra.putIfAbsent(x.getAssignmentId(), r);
+                    }
+                    if (extra.size() != s.lockedItems().size()) {
+                        s = new ModuleState(s.moduleId(), s.status(), s.lockReason(), s.metRequirementIds(), s.completedItemIds(), extra);
+                    }
+                }
+            }
             Map<UUID, ModuleCompletionRequirement> reqOf = new HashMap<>();
             req.getOrDefault(m.getModuleId(), List.of()).forEach(r -> reqOf.put(r.getContentId() != null ? r.getContentId() : r.getAssignmentId(), r));
             List<ModuleItemDto> itemDtos = new ArrayList<>();
             for (Content x : items.getOrDefault(m.getModuleId(), List.of())) {
-                if (!staff && !(Boolean.TRUE.equals(x.getIsPublished()) && ModuleProgressServiceImplementation.studentVisible(x))) continue;
+                if (!staff && !(Boolean.TRUE.equals(x.getIsPublished()) && contentPermissions.canView(x, Access.ctx().userId()))) continue;
                 itemDtos.add(item("CONTENT", x.getContentId(), x.getContentId(), null, x.getContentTitle(), typeCodes.get(x.getTypeId()),
                         x.getIsPublished(), x.getDisplayOrder(), reqOf.get(x.getContentId()), staff ? null : s));
             }
@@ -189,6 +233,11 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     public CourseModuleDto update(UUID moduleId, UpdateCourseModuleRequest r) {
         CourseModule m = module(moduleId);
         access.requireCourseEditor(m.getCourseId());
+        java.util.EnumSet<BlueprintLockAspect> touched = java.util.EnumSet.noneOf(BlueprintLockAspect.class);
+        if (r.moduleTitle() != null || r.moduleDescription() != null) touched.add(CONTENT);
+        if (r.dateStart() != null || r.dateEnd() != null || r.dateUnlock() != null) touched.add(AVAILABILITY);
+        if (r.moduleType() != null || r.isLocked() != null || r.requireSequentialProgress() != null) touched.add(SETTINGS);
+        blueprintLocks.requireEditable(m.getCourseId(), BlueprintContentLockObjectType.MODULE, moduleId, touched);
         moduleMapper.updateEntity(r, m);
         validateDates(m.getDateStart(), m.getDateEnd());
         return toDto(modules.saveAndFlush(m));
@@ -199,6 +248,7 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     public CourseModuleDto setPublished(UUID moduleId, boolean published, boolean includeItems) {
         CourseModule m = module(moduleId);
         access.requireCourseEditor(m.getCourseId());
+        blueprintLocks.requireEditable(m.getCourseId(), BlueprintContentLockObjectType.MODULE, moduleId, java.util.EnumSet.of(AVAILABILITY));
         m.setIsPublished(published);
         modules.saveAndFlush(m);
         if (published && includeItems) {
@@ -226,6 +276,7 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     public void delete(UUID moduleId) {
         CourseModule m = module(moduleId);
         access.requireCourseEditor(m.getCourseId());
+        blueprintLocks.requireEditable(m.getCourseId(), BlueprintContentLockObjectType.MODULE, moduleId, java.util.EnumSet.of(CONTENT));
         modules.delete(m);              // items stay in the course (module_id set to NULL); requirements and progress go
         modules.flush();
     }
@@ -244,94 +295,15 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
     }
 
     /** Prerequisites must be earlier modules of the same course (as in Canvas), so there can be no cycles. */
-    @Transactional
-    @Override
-    public CourseModuleDto setPrerequisites(UUID moduleId, ModulePrerequisitesRequest r) {
-        CourseModule m = module(moduleId);
-        access.requireCourseEditor(m.getCourseId());
-        List<CourseModule> ordered = modules.findByCourseIdOrderByDisplayOrderAscModuleNumberAsc(m.getCourseId());
-        Map<UUID, Integer> position = new HashMap<>();
-        for (int i = 0; i < ordered.size(); i++) position.put(ordered.get(i).getModuleId(), i);
-        Set<UUID> wanted = new LinkedHashSet<>(r.prerequisiteModuleIds());
-        for (UUID p : wanted) {
-            Integer pos = position.get(p);
-            if (pos == null) throw ApiException.badRequest("MODULE_NOT_IN_COURSE", "Prerequisite " + p + " is not a module of this course");
-            if (pos >= position.get(moduleId)) {
-                throw ApiException.badRequest("PREREQUISITE_ORDER", "A prerequisite must be a module that comes before this one");
-            }
-        }
-        prerequisites.deleteByModuleId(moduleId);
-        for (UUID p : wanted) {
-            ModulePrerequisite mp = new ModulePrerequisite();
-            mp.setModuleId(moduleId);
-            mp.setPrerequisiteModuleId(p);
-            prerequisites.save(mp);
-        }
-        prerequisites.flush();
-        return toDto(m);
-    }
 
-    @Transactional
-    @Override
-    public CourseModuleDto addRequirement(UUID moduleId, AddModuleRequirementRequest r) {
-        CourseModule m = module(moduleId);
-        access.requireCourseEditor(m.getCourseId());
-        if ((r.contentId() == null) == (r.assignmentId() == null)) {
-            throw ApiException.badRequest("ONE_ITEM_REQUIRED", "Give either contentId or assignmentId");
-        }
-        ModuleCompletionRequirement req;
-        Integer order;
-        if (r.contentId() != null) {
-            if (!CONTENT_REQUIREMENTS.contains(r.requirementType())) {
-                throw ApiException.badRequest("REQUIREMENT_NOT_FOR_CONTENT", "Content items take VIEW or MARK_DONE requirements");
-            }
-            Content x = contents.findById(r.contentId()).filter(c -> moduleId.equals(c.getModuleId()))
-                    .orElseThrow(() -> ApiException.badRequest("ITEM_NOT_IN_MODULE", "The item is not in this module"));
-            req = requirements.findByModuleIdAndContentId(moduleId, x.getContentId()).orElseGet(ModuleCompletionRequirement::new);
-            req.setContentId(x.getContentId());
-            req.setMinScore(null);
-            order = x.getDisplayOrder();
-        } else {
-            if (!ASSIGNMENT_REQUIREMENTS.contains(r.requirementType())) {
-                throw ApiException.badRequest("REQUIREMENT_NOT_FOR_ASSIGNMENT", "Assignments take SUBMIT or MIN_SCORE requirements");
-            }
-            Assignment x = assignments.findById(r.assignmentId()).filter(a -> moduleId.equals(a.getModuleId()))
-                    .orElseThrow(() -> ApiException.badRequest("ITEM_NOT_IN_MODULE", "The assignment is not in this module"));
-            if (r.requirementType() == ModuleCompletionRequirementType.MIN_SCORE) {
-                if (r.minScore() == null) throw ApiException.badRequest("MIN_SCORE_REQUIRED", "MIN_SCORE needs minScore (points)");
-                if (x.getPointsPossible() != null && r.minScore().compareTo(x.getPointsPossible()) > 0) {
-                    throw ApiException.badRequest("MIN_SCORE_TOO_HIGH", "minScore is higher than the assignment's points");
-                }
-            }
-            req = requirements.findByModuleIdAndAssignmentId(moduleId, x.getAssignmentId()).orElseGet(ModuleCompletionRequirement::new);
-            req.setAssignmentId(x.getAssignmentId());
-            req.setMinScore(r.requirementType() == ModuleCompletionRequirementType.MIN_SCORE ? r.minScore() : null);
-            order = x.getDisplayOrder();
-        }
-        req.setModuleId(moduleId);
-        req.setRequirementType(r.requirementType());
-        req.setDisplayOrder(order);
-        requirements.saveAndFlush(req);
-        return toDto(m);
-    }
 
-    @Transactional
-    @Override
-    public CourseModuleDto removeRequirement(UUID moduleId, UUID requirementId) {
-        CourseModule m = module(moduleId);
-        access.requireCourseEditor(m.getCourseId());
-        ModuleCompletionRequirement req = requirements.findById(requirementId).filter(x -> x.getModuleId().equals(moduleId))
-                .orElseThrow(() -> ApiException.notFound("Requirement"));
-        requirements.delete(req);
-        requirements.flush();
-        return toDto(m);
-    }
 
     @Transactional
     @Override
     public ModuleViewDto reorderItems(UUID moduleId, ReorderRequest r) {
         CourseModule m = module(moduleId);
         access.requireCourseEditor(m.getCourseId());
+        blueprintLocks.requireEditable(m.getCourseId(), BlueprintContentLockObjectType.MODULE, moduleId, java.util.EnumSet.of(SETTINGS));
         List<Content> items = contents.findByModuleIdOrderByDisplayOrderAscContentTitleAsc(moduleId);
         List<Assignment> work = assignments.findByModuleIdIn(List.of(moduleId));
         List<UUID> current = new ArrayList<>(items.stream().map(Content::getContentId).toList());
@@ -351,19 +323,16 @@ public class CourseModuleServiceImplementation implements CourseModuleService {
         return views(course(m.getCourseId()), List.of(m)).get(0);
     }
 
-    @Transactional
-    @Override
-    public List<ModuleStudentProgressDto> studentProgress(UUID moduleId) {
-        CourseModule m = module(moduleId);
-        Access.requireTenant();
-        if (!isStaff(m.getCourseId())) throw ApiException.forbidden("Only course staff can see student progress");
-        return progress.moduleProgress(moduleId);
-    }
 
     // ---------------------------------------------------------------- helpers
 
     private boolean isStaff(UUID courseId) {
         return access.canSeeEverything() || access.isCourseStaff(courseId);
+    }
+
+    @Override
+    public CourseModuleDto dto(UUID moduleId) {
+        return toDto(module(moduleId));
     }
 
     private CourseModuleDto toDto(CourseModule m) {

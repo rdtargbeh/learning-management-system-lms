@@ -21,4 +21,8 @@ public interface StudentGroupRepository extends JpaRepository<StudentGroup, UUID
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select g from StudentGroup g where g.groupId = :id")
     Optional<StudentGroup> lockById(@Param("id") UUID id);
+
+    List<StudentGroup> findByGroupSetIdAndIsActiveTrue(UUID groupSetId);
+
+    long countByGroupSetId(UUID groupSetId);
 }

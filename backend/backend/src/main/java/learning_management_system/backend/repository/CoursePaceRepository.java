@@ -1,12 +1,15 @@
 package learning_management_system.backend.repository;
 
 import learning_management_system.backend.entity.CoursePace;
+import learning_management_system.backend.enums.PaceStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.UUID;
+import java.util.List;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
-public interface CoursePaceRepository extends JpaRepository<CoursePace, UUID> {
+public interface CoursePaceRepository extends JpaRepository<CoursePace, java.util.UUID> {
+    List<CoursePace> findByCourseIdOrderByDateCreatedAsc(java.util.UUID courseId);
+
+    List<CoursePace> findByCourseIdAndPaceStatus(java.util.UUID courseId, PaceStatus status);
 }

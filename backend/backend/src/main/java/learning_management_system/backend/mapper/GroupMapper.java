@@ -1,5 +1,10 @@
 package learning_management_system.backend.mapper;
 
+import learning_management_system.backend.dto.UpdateGroupSetRequest;
+import learning_management_system.backend.dto.UpdateStudentGroupRequest;
+import org.mapstruct.BeanMapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 import learning_management_system.backend.config.MapStructConfig;
 import learning_management_system.backend.dto.CreateGroupSetRequest;
 import learning_management_system.backend.dto.CreateStudentGroupRequest;
@@ -20,7 +25,15 @@ public interface GroupMapper {
 
     GroupSet toEntity(CreateGroupSetRequest request);
 
+    /** PATCH: null values leave the field unchanged. */
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    void updateEntity(UpdateGroupSetRequest request, @MappingTarget GroupSet groupSet);
+
     StudentGroupDto toDto(StudentGroup group);
+
+    /** PATCH: null values leave the field unchanged. */
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    void updateEntity(UpdateStudentGroupRequest request, @MappingTarget StudentGroup group);
 
     StudentGroup toEntity(CreateStudentGroupRequest request);
 

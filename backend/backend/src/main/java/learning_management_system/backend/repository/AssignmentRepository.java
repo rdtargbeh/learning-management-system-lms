@@ -20,4 +20,6 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     /** Assignments and content share one order inside a module. */
     @Query("select coalesce(max(a.displayOrder), 0) from Assignment a where a.moduleId = :moduleId")
     int maxDisplayOrderInModule(@Param("moduleId") UUID moduleId);
+
+    boolean existsByGroupSetId(UUID groupSetId);
 }

@@ -8,7 +8,7 @@ Spring Boot 3.4 / Java 21 backend for the multi-tenant Learning Management Syste
 The code is organised by layer. Every layer is one flat package under `learning_management_system.backend`, so a
 table's classes are found by name (`Course`, `CourseDto`, `CourseMapper`, `CourseRepository`, `CourseService`,
 `CourseServiceImplementation`, `CourseController`). Each implemented table has its own service, implementation and
-controller (domains 01 and 02 completely). The only services without a table of their own are helpers: `AuthService`
+controller (domains 01 to 04 completely). The only services without a table of their own are helpers: `AuthService`
 (the sign-in flow), `UserProvisioningService` (account creation) and `MailService`.
 
 | Package | Contents |
@@ -24,13 +24,13 @@ controller (domains 01 and 02 completely). The only services without a table of 
 | `security/` | JWT tokens, request context, permission checks, tenant stamping of new rows, trusted system transactions. |
 | `config/` | Spring configuration: security, row-level-security transaction manager, MapStruct settings, first-start bootstrap. |
 | `exception/` | `ApiException` and the global error handler. |
-| `utility/` | Small helpers: `Patch`, `ClientInfo` (IP, user agent), `DnsTxtResolver` (domain verification), `Tokens` (random tokens, SHA-256), `Totp` (RFC 6238 authenticator codes), `SecretCipher` (AES-GCM for stored MFA secrets). |
+| `utility/` | Small helpers: `Patch`, `ClientInfo` (IP, user agent), `DnsTxtResolver` (domain verification), `BlueprintCopyMap` (blueprint copies), `Tokens` (random tokens, SHA-256), `Totp` (RFC 6238 authenticator codes), `SecretCipher` (AES-GCM for stored MFA secrets). |
 | `specification/` | JPA Specifications for dynamic search filters (`AuditLogSpecification`). |
 | `src/main/resources/db/schema/` | The database schema: one SQL file per domain, plus `run_all.sql`. This is the source of truth. |
-| `scripts/` | `gen_entities.py` (regenerates entities, repositories and enums), `catalog.sql`, `api_smoke_test.py` (61 identity/tenancy checks), `api_test_courses.py` (184 course/enrollment checks), `api_test_content.py` (145 content/module checks), `api_test_assignments.py` (194 assignment checks), `api_test_identity.py` (268 checks: branding, plan limits, institution record, domains, sessions, MFA, password reset, locks, audit log, profiles, role permissions, settings, accommodations). Run them in that order on a fresh database; the last one reads mailed tokens from the app log (`LMS_APP_LOG`). |
+| `scripts/` | `gen_entities.py` (regenerates entities, repositories and enums), `catalog.sql`, `api_smoke_test.py` (61 identity/tenancy checks), `api_test_courses.py` (184 course/enrollment checks), `api_test_content.py` (145 content/module checks), `api_test_assignments.py` (194 assignment checks), `api_test_identity.py` (268 checks: branding, plan limits, institution record, domains, sessions, MFA, password reset, locks, audit log, profiles, role permissions, settings, accommodations). `api_test_academic.py` (255 checks: staff, prerequisites, schedules, outcomes, navigation, blueprints), `api_test_enrollment.py` (157 checks: group sets, auto-assign, leaders, tags, pairing codes), `api_test_learning.py` (322 checks: videos, content blocks, interactive items, content permissions, resource library, release conditions, mastery paths, pacing). Run them in that order on a fresh database; the identity test reads mailed tokens from the app log (`LMS_APP_LOG`), the academic test writes final grades with psql (`LMS_PSQL`). |
 
 So far services and controllers exist for **tenancy, identity, academic structure, courses, enrollment, content, modules and assignments**.
-Every table of domains 01 (tenancy) and 02 (identity) is now covered.
+Every table of domains 01 (tenancy), 02 (identity), 03 (academic structure) and 04 (enrollment) is now covered.
 
 ## How multi-tenancy works
 - One shared schema, `lms_core`. Every table has `tenant_id`, and PostgreSQL row-level security (RLS) enforces isolation.
@@ -97,16 +97,29 @@ password reset (`/auth/password/forgot|reset`), `/auth/email/verify`, and `GET /
 | Academic structure | `GET/POST /org-units` · `PATCH /org-units/{id}` · `GET/POST /terms` · `GET /terms/current` · `PATCH /terms/{id}` · `GET/POST /course-categories` · `PATCH /course-categories/{id}` |
 | Courses | `POST/GET /courses` (filters: `termId`, `status`, `categoryId`, `orgUnitId`, `q`) · `GET /courses/mine` · `GET/PATCH /courses/{id}` · `POST /courses/{id}/publish|unpublish|conclude|archive|unarchive` · `PUT /courses/{id}/self-enrollment` |
 | Sections | `GET/POST /courses/{id}/sections` · `GET/PATCH /sections/{id}` · `POST /sections/{id}/crosslist|uncrosslist` · `GET/POST /sections/{id}/staff` · `DELETE /sections/{id}/staff/{staffId}` |
+| Prerequisites | `GET/POST /courses/{id}/prerequisites` · `DELETE /courses/{id}/prerequisites/{pid}` · `GET /courses/{id}/prerequisites/check[?userId=]` |
+| Meeting times | `GET/POST /sections/{id}/schedule` · `PUT/DELETE /sections/{id}/schedule/{scheduleId}` · `GET /me/schedule[?termId=]` |
+| Outcomes | `GET/POST /courses/{id}/outcomes[?includeInherited&includeInactive]` · `GET/POST /org-units/{id}/outcomes` · `GET/PATCH/DELETE /outcomes/{id}` |
+| Navigation | `GET/PUT /courses/{id}/navigation` |
+| Blueprints | `GET/POST /courses/{id}/blueprint/associations` · `DELETE .../associations/{aid}` · `GET/PUT /courses/{id}/blueprint/locks` · `DELETE .../locks/{lockId}` · `GET/POST /courses/{id}/blueprint/syncs` · `GET .../syncs/{runId}` · `GET /courses/{id}/blueprint-status` |
 | Enrollment | `GET/POST /sections/{id}/enrollments` · `POST /enrollments/self` (code) · `GET /enrollments/{id}` · `PATCH /enrollments/{id}/status` · `GET /users/{id}/enrollments` |
 | Waitlist | `GET/POST /sections/{id}/waitlist` · `GET /waitlist/mine` · `POST /waitlist/{id}/accept|decline|leave` |
-| Groups | `GET/POST /courses/{id}/group-sets` · `GET/POST /group-sets/{id}/groups` · `GET/POST /groups/{id}/members` · `DELETE /groups/{id}/members/{userId}` |
+| Groups | `GET/POST /courses/{id}/group-sets` · `GET/PATCH/DELETE /group-sets/{id}` · `POST /group-sets/{id}/auto-assign` · `GET/POST /group-sets/{id}/groups` · `GET/PATCH/DELETE /groups/{id}` · `GET/POST /groups/{id}/members` · `DELETE /groups/{id}/members/{userId}` · `GET /courses/{id}/groups/mine` · `GET/POST /groups/{id}/leaders` · `POST /groups/{id}/leaders/{leaderId}/end` |
+| Tags | `GET/POST /courses/{id}/tags` · `PATCH/DELETE /tags/{id}` · `GET/POST /tags/{id}/members` · `DELETE /tags/{id}/members/{userId}` |
+| Pairing codes | `GET/POST /users/{id}/pairing-codes` · `POST /observer-links/pair` |
 | Content types | `GET/POST /content-types` |
-| Modules | `GET/POST /courses/{id}/modules` · `PUT /courses/{id}/modules/order` · `GET/PATCH/DELETE /modules/{id}` · `POST /modules/{id}/publish[?includeItems=true]|unpublish` · `PUT /modules/{id}/prerequisites` · `POST /modules/{id}/requirements` · `DELETE /modules/{id}/requirements/{reqId}` · `PUT /modules/{id}/items/order` · `GET /modules/{id}/progress` |
+| Modules | `GET/POST /courses/{id}/modules` · `PUT /courses/{id}/modules/order` · `GET/PATCH/DELETE /modules/{id}` · `POST /modules/{id}/publish[?includeItems=true]|unpublish` · `GET/PUT /modules/{id}/prerequisites` · `GET/POST /modules/{id}/requirements` · `DELETE /modules/{id}/requirements/{reqId}` · `PUT /modules/{id}/items/order` · `GET /modules/{id}/progress` |
 | Assignments | `GET/POST /courses/{id}/assignments` · `GET/PATCH/DELETE /assignments/{id}` · `POST /assignments/{id}/publish|unpublish|move` · `GET/POST /assignments/{id}/overrides` · `DELETE /assignments/{id}/overrides/{overrideId}` |
 | Submissions | `POST /assignments/{id}/submissions` (text/link, `draft`) · `GET /assignments/{id}/submissions/mine` · `GET /assignments/{id}/submissions` (graders) · `POST /assignments/{id}/post-grades` · `PUT/DELETE /assignments/{id}/students/{userId}/excuse` · `GET /submissions/{id}` · `POST /submissions/{id}/grade|reassign` |
 | Peer reviews | `POST /assignments/{id}/peer-reviews/assign` · `GET /assignments/{id}/peer-reviews[/mine|/received]` · `POST /peer-reviews/{id}/submit` |
 | Comment library | `GET/POST /comment-library` · `POST /comment-library/{id}/use` · `DELETE /comment-library/{id}` |
 | Content | `GET/POST /courses/{id}/content` (filter: `type`) · `GET /courses/{id}/front-page` · `GET/PATCH/DELETE /content/{id}` · `POST /content/{id}/publish|unpublish|move` · `POST/DELETE /content/{id}/done` · `GET /content/{id}/progress` |
+| Content details | `GET/PUT/DELETE /content/{id}/video` · `GET/PUT/DELETE /content/{id}/interactive` · `GET/POST /content/{id}/blocks` · `PUT /content/{id}/blocks/order` · `PATCH/DELETE /content-blocks/{id}` |
+| Content permissions | `GET/POST /content/{id}/permissions` · `DELETE /content/{id}/permissions/{pid}` · `GET /content/{id}/permissions/mine` |
+| Resource library | `GET/POST /resource-library[?type&q]` · `GET/PATCH/DELETE /resource-library/{id}` · `POST /resource-library/{id}/approve|unapprove|use|download` |
+| Release conditions | `GET/POST /courses/{id}/release-conditions[?targetType&targetId]` · `DELETE /courses/{id}/release-conditions/{cid}` |
+| Mastery paths | `GET/POST /courses/{id}/mastery-paths` · `GET/DELETE /mastery-paths/{id}` · `GET /mastery-paths/{id}/mine` · `POST /mastery-paths/{id}/ranges` · `PATCH/DELETE /mastery-path-ranges/{id}` · `POST /mastery-path-ranges/{id}/items` · `DELETE /mastery-path-items/{id}` |
+| Course pacing | `GET/POST /courses/{id}/paces` · `GET /courses/{id}/pace/mine` · `GET/PATCH/DELETE /paces/{id}` · `POST /paces/{id}/refresh|publish|archive` · `GET /paces/{id}/schedule[?userId=]` · `GET /paces/{id}/items` · `PATCH /pace-items/{id}` |
 
 Authorization: institution admins (`TENANT_ADMIN`) can do everything in their institution. Other users need permissions
 granted through roles (`USER_READ`, `USER_MANAGE`, `ROLE_MANAGE`, `OBSERVER_MANAGE`, `TENANT_SETTINGS_MANAGE`,
@@ -124,7 +137,7 @@ The section row is locked while seats change, so parallel enrollments cannot ove
 When a seat frees up (withdrawal, more capacity, a declined offer) the next waitlisted student is enrolled automatically,
 or offered the seat if they asked for an offer.
 
-Modules work like Canvas modules (`serviceimpl/ModuleProgressServiceImplementation`):
+Modules work like Canvas modules (`serviceimpl/StudentModuleProgressServiceImplementation`):
 - **Locks:** a module is LOCKED for a student while the teacher locks it, its unlock date is in the future, or a
   prerequisite (an earlier module) is not completed.
 - **Progress:** an unlocked module is UNLOCKED, then STARTED, then COMPLETED once every requirement is met. Requirements
@@ -136,6 +149,26 @@ Modules work like Canvas modules (`serviceimpl/ModuleProgressServiceImplementati
 - **Module items** are content and assignments in one order. Assignments take SUBMIT or MIN_SCORE (points, posted
   grades only) requirements; an excused assignment counts as met.
 
+More learning content:
+- **Content blocks:** a page can be built from ordered blocks (text, code, table ...); students read them unless the
+  page is locked. Interactive, SCORM and external-tool items carry launch details: LTI needs a tool, SCORM a package,
+  embeds and links an https URL.
+- **Content permissions:** students get VIEW, DOWNLOAD, PRINT and COMMENT on normal items. RESTRICTED items need a VIEW
+  grant (to the user or one of their roles). Grants and denials can target a role or a user; a user's own row wins.
+  INSTRUCTOR_ONLY items are never shown to students.
+- **Resource library:** platform resources (platform admins, approved at once) and institution resources (suggested by
+  staff, approved with `COURSE_MANAGE`). Students see only approved public ones. Use and download are counted.
+- **Release conditions (Brightspace-style):** on content, modules and assignments. Types: DATE, MEMBER (user,
+  section, group or tag), SUBMITTED and PERFORMANCE (min % on an assignment, posted grades only), VIEWED, COMPLETED.
+  Conditions in one group must all be met; any one group releases the item. Students get a reason such as
+  `Submit "X" first`. A locked module locks all its items. Staff are never held back.
+- **Mastery paths (Canvas-style):** score ranges on a points assignment, each releasing items. Ranges may touch but not
+  overlap (`409 RANGES_OVERLAP`); the top range includes 100%. Items on a path stay locked until the student's posted
+  score falls in a range that holds them.
+- **Course pacing (Canvas-style):** a pace for the course, a section or one student (most specific wins) gives each
+  module item a number of days. Dates start at the student's enrollment (or the course start), skip weekends and
+  blackout days, and are squeezed to fit before the pace's end date. A published pace sets assignment due dates.
+
 Assignments follow Canvas:
 - **Dates:** an assignment is due at the end of its due day in the course time zone. Overrides give a student, section
   or group their own dates or extra attempts; the most generous applicable one wins.
@@ -146,6 +179,35 @@ Assignments follow Canvas:
 - **Grading:** teachers, TAs and graders grade (reviewers cannot). With the course's AUTOMATIC post policy students see
   grades at once; with MANUAL they see them after `post-grades`. Graders can excuse a student or reassign an attempt
   (it stops counting toward the attempt limit). Anonymous grading hides names from graders.
+
+## Academic structure rules
+- **Prerequisites:** REQUIRED courses must be completed (with at least `minGrade` when set, from the final or override
+  letter in the gradebook); COREQUISITE courses completed or taken now; RECOMMENDED are shown only. Checked when
+  students enroll themselves or join a waitlist and when teachers enroll students (`409 PREREQUISITES_NOT_MET`).
+  Admins with `ENROLLMENT_MANAGE` can pass `overridePrerequisites`. A REQUIRED chain cannot loop.
+- **Meeting times:** course admins set them. A room or instructor cannot be double-booked in the same term
+  (`ROOM_CONFLICT`, `INSTRUCTOR_CONFLICT`). `/me/schedule` is the weekly timetable from enrollments and teaching.
+- **Outcomes:** course outcomes (course teachers) and org-unit outcomes (`ACADEMIC_STRUCTURE_MANAGE`), inherited
+  down the org-unit tree. DECAYING_AVERAGE takes a weight 1-99 (default 65), N_MASTERY a count 1-10 (default 5).
+  An outcome with student results cannot be deleted, only deactivated.
+- **Navigation:** built-in tools plus external tools; teachers reorder, rename and hide. Home cannot be hidden;
+  Settings is last and staff-only.
+- **Groups:** a student is in at most one group per set. Auto-assign puts unassigned students into the smallest
+  groups at random, creating groups as needed (per section when the set is restricted to sections). Leaders live in
+  `group_leader`; with `autoAssignLeader` the first member becomes PROJECT_LEAD and the lead passes on when they leave.
+  A set used by a group assignment, or a group that handed in work, cannot be deleted.
+- **Differentiation tags:** staff-only student labels; assignment overrides can target a tag (TAG), so tagged students
+  get their own dates. Students never see tags.
+- **Pairing codes:** a student (or OBSERVER_MANAGE) creates an 8-character code valid 7 days, stored only as a hash; an
+  observer account redeems it once to follow the student. A new code replaces unused ones.
+- **Blueprints (Canvas-style):** a BLUEPRINT course is associated with STANDARD courses (one blueprint each). A sync
+  copies modules (with prerequisites and requirements), pages (with video details and content blocks) and assignments, and optionally the
+  course settings. Locks per item cover content, points, due dates, availability and settings; a SETTINGS lock covers
+  the course settings. In associated courses locked aspects cannot be edited (`409 BLUEPRINT_LOCKED`) and are always
+  overwritten by a sync. Unlocked ones are overwritten only when the course has not changed the item since the last
+  sync, otherwise the course's version stays and the run lists an exception. Items deleted from the blueprint are
+  deleted from courses unless changed there or students handed in work. Which copy belongs to which blueprint item is
+  kept in each run's `changes` (internal `copies` map, not returned by the API).
 
 ## Sign-in and account security
 - **Sessions:** sign-in returns a short-lived access token and a refresh token (30 days, `lms.security.refresh-ttl-days`).
@@ -173,6 +235,15 @@ Assignments follow Canvas:
 - **Accommodations:** disability services (`ACCOMMODATION_MANAGE`) approve them for students. A course's teachers see
   the active ones for their students, without the details when they are confidential.
 
+## Schema fixes
+`blueprint_sync_run.run_status` and `sis_sync_run.run_status` were `VARCHAR(20)`, too short for their own allowed
+values `COMPLETED_WITH_EXCEPTIONS` and `COMPLETED_WITH_ERRORS`. The schema files now use `VARCHAR(30)`. A database
+created before this fix needs:
+```
+ALTER TABLE lms_core.blueprint_sync_run ALTER COLUMN run_status TYPE VARCHAR(30);
+ALTER TABLE lms_core.sis_sync_run ALTER COLUMN run_status TYPE VARCHAR(30);
+```
+
 ## After a schema change
 ```
 psql -d lms-app -At -f scripts/catalog.sql > scripts/catalog.json
@@ -183,8 +254,8 @@ Never edit generated entities or enums by hand. Put custom queries in the hand-w
 
 ## Not done yet
 - Services and controllers for the other domains: gradebook, quizzes, discussions, etc. The entities and repositories for them already exist.
-- In academic structure and enrollment, not built yet: course prerequisites, meeting schedules, blueprint courses, course navigation, differentiation tags, observer pairing codes, group leaders.
-- In content, not built yet: content blocks, interactive/SCORM details, per-user content permissions (RESTRICTED items stay hidden), release conditions, mastery paths, course pacing, file uploads. Quiz and discussion module requirements arrive with those features.
+- Blueprints: quizzes, discussions, files, announcements and rubrics are not synced yet (they arrive with those features); `notifyUsers` is stored but no notification is sent yet.
+- In content, not built yet: file uploads; quiz and discussion requirements, release conditions and mastery-path triggers arrive with those features (FILE release targets too).
 - In assignments, not built yet: file, media and annotation submissions (needs file storage), rubrics, moderated grading,
   plagiarism scans, submission annotations, feedback tags, automatic late-penalty deduction, section-limited graders,
   and feeding grades into the gradebook (next step).

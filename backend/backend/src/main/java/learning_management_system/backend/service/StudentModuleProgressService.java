@@ -24,7 +24,7 @@ import java.util.UUID;
  * </ul>
  * Callers authorize; only students (active STUDENT/AUDIT/VISITING enrollment) have progress recorded.
  */
-public interface ModuleProgressService {
+public interface StudentModuleProgressService {
 
     /** The state of one module for one student. */
     record ModuleState(UUID moduleId, ProgressStatus status, String lockReason, Set<UUID> metRequirementIds,
@@ -45,6 +45,6 @@ public interface ModuleProgressService {
     /** "Mark as done" (or undo) for an item; then updates module progress. */
     StudentContentProgress markDone(Content content, UUID userId, boolean done);
 
-    /** Every student's progress in a module, for the teacher. */
+    /** Every student's progress in a module (course staff only). */
     List<ModuleStudentProgressDto> moduleProgress(UUID moduleId);
 }

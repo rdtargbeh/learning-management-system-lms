@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface ObserverStudentLinkRepository extends JpaRepository<ObserverStudentLink, UUID> {
     List<ObserverStudentLink> findByStudentUserId(UUID studentUserId);
     List<ObserverStudentLink> findByObserverUserId(UUID observerUserId);
+
+    Optional<ObserverStudentLink> findByObserverUserIdAndStudentUserId(UUID observerUserId, UUID studentUserId);
 }

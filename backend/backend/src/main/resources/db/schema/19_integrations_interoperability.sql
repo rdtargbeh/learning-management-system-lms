@@ -356,7 +356,7 @@ CREATE TABLE sis_sync_run (
     tenant_id UUID NOT NULL DEFAULT app_current_tenant_id(),
     sis_integration_id UUID NOT NULL,
     sync_type VARCHAR(30) NOT NULL,
-    run_status VARCHAR(20) NOT NULL DEFAULT 'QUEUED',
+    run_status VARCHAR(30) NOT NULL DEFAULT 'QUEUED',
     source_file_id UUID,
     is_diff_mode BOOLEAN NOT NULL DEFAULT TRUE,
     records_processed INT NOT NULL DEFAULT 0,

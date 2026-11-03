@@ -55,7 +55,7 @@ public class BlueprintSyncRun implements TenantScoped {
     private Boolean notifyUsers;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "run_status", nullable = false, length = 20)
+    @Column(name = "run_status", nullable = false, length = 30)
     private BlueprintSyncRunStatus runStatus;
 
     @JdbcTypeCode(SqlTypes.JSON)

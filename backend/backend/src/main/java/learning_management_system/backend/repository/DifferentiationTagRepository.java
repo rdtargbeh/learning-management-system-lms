@@ -4,9 +4,12 @@ import learning_management_system.backend.entity.DifferentiationTag;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
-/** Generated repository; add custom queries in a hand-written repository if needed. */
 @Repository
 public interface DifferentiationTagRepository extends JpaRepository<DifferentiationTag, UUID> {
+    List<DifferentiationTag> findByCourseIdOrderByTagNameAsc(UUID courseId);
+
+    boolean existsByCourseIdAndTagNameIgnoreCase(UUID courseId, String tagName);
 }

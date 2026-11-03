@@ -28,7 +28,7 @@ import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
 import learning_management_system.backend.service.AssignmentService;
 import learning_management_system.backend.service.AssignmentService.Schedule;
-import learning_management_system.backend.service.ModuleProgressService;
+import learning_management_system.backend.service.StudentModuleProgressService;
 import learning_management_system.backend.service.SubmissionService;
 import learning_management_system.backend.service.UserService;
 
@@ -55,7 +55,7 @@ public class SubmissionServiceImplementation implements SubmissionService {
     private final EnrollmentRepository enrollments;
     private final GroupMemberRepository members;
     private final AssignmentService assignmentService;
-    private final ModuleProgressService progress;
+    private final StudentModuleProgressService progress;
     private final UserService userService;
     private final CourseAccess access;
     private final AssignmentMapper assignmentMapper;
@@ -63,7 +63,7 @@ public class SubmissionServiceImplementation implements SubmissionService {
     public SubmissionServiceImplementation(AssignmentRepository assignments, AssignmentSubmissionRepository submissions,
                                            FeedbackRepository feedback, CourseRepository courses,
                                            EnrollmentRepository enrollments, GroupMemberRepository members,
-                                           AssignmentService assignmentService, ModuleProgressService progress,
+                                           AssignmentService assignmentService, StudentModuleProgressService progress,
                                            UserService userService, CourseAccess access, AssignmentMapper assignmentMapper) {
         this.assignments = assignments;
         this.submissions = submissions;

@@ -18,6 +18,7 @@ import learning_management_system.backend.repository.CourseSectionRepository;
 import learning_management_system.backend.repository.EnrollmentRepository;
 import learning_management_system.backend.security.Access;
 import learning_management_system.backend.security.CourseAccess;
+import learning_management_system.backend.service.CoursePrerequisiteService;
 import learning_management_system.backend.security.Permissions;
 import learning_management_system.backend.service.EnrollmentProvisioningService;
 import learning_management_system.backend.service.EnrollmentService;
@@ -44,9 +45,13 @@ public class EnrollmentServiceImplementation implements EnrollmentService {
     private final CourseAccess access;
     private final EnrollmentMapper enrollmentMapper;
 
+    private final CoursePrerequisiteService prerequisites;
+
     public EnrollmentServiceImplementation(CourseRepository courses, CourseSectionRepository sections,
                                            EnrollmentRepository enrollments, EnrollmentProvisioningService provisioning,
-                                           UserService userService, CourseAccess access, EnrollmentMapper enrollmentMapper) {
+                                           UserService userService, CourseAccess access, EnrollmentMapper enrollmentMapper,
+                                           CoursePrerequisiteService prerequisites) {
+        this.prerequisites = prerequisites;
         this.courses = courses;
         this.sections = sections;
         this.enrollments = enrollments;
@@ -63,6 +68,16 @@ public class EnrollmentServiceImplementation implements EnrollmentService {
         CourseSection s = provisioning.lockSection(sectionId);
         access.requireRosterManager(s);
         Course c = course(s.getCourseId());
+        EnrollmentType type = r.enrollmentType() == null ? EnrollmentType.STUDENT : r.enrollmentType();
+        if (type == EnrollmentType.STUDENT || type == EnrollmentType.VISITING) {
+            if (Boolean.TRUE.equals(r.overridePrerequisites())) {
+                if (!Access.hasTenantPermission(Permissions.ENROLLMENT_MANAGE)) {
+                    throw ApiException.forbidden("Only enrollment administrators can override prerequisites");
+                }
+            } else {
+                prerequisites.requireMet(c.getCourseId(), r.userId());
+            }
+        }
         EnrollmentSource source = r.sisSourceId() != null ? EnrollmentSource.SIS : EnrollmentSource.MANUAL;
         Enrollment e = provisioning.enroll(s, c, r.userId(), r.enrollmentType(), r.observedUserId(), source,
                 r.limitToSection(), r.sisSourceId());
@@ -80,6 +95,7 @@ public class EnrollmentServiceImplementation implements EnrollmentService {
         if (enrollments.isActiveInCourse(c.getCourseId(), me)) {
             throw ApiException.conflict("ALREADY_ENROLLED", "You are already enrolled in this course");
         }
+        prerequisites.requireMet(c.getCourseId(), me);
         LocalDate today = LocalDate.now();
         boolean sawOpenSection = false;
         for (CourseSection candidate : sections.findByCourseIdOrderBySectionNumberAsc(c.getCourseId())) {
