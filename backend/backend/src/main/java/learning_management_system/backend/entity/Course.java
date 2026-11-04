@@ -1,380 +1,147 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.CourseKind;
+import learning_management_system.backend.enums.CourseLevel;
 import learning_management_system.backend.enums.CourseStatus;
-import learning_management_system.backend.enums.CourseVisibility;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import learning_management_system.backend.enums.CourseType;
+import learning_management_system.backend.enums.DefaultPostPolicy;
+import learning_management_system.backend.enums.GradeCalculationMethod;
+import learning_management_system.backend.enums.HomePageType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
 
-import java.time.LocalDate;
-import java.util.Date;
-import java.util.List;
-import java.util.Set;
 /**
- * Represents a course in the LMS system. A course includes content, assignments,
- * and relationships with staff, students, and tenants, along with its metadata
- * and lifecycle management attributes.
+ * Table <b>course</b> (Academic Structure domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
  */
-
-@CrossOrigin("*")
 @Entity
-@Table (name = "courses")
-public class Course {
+@Table(name = "course", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class Course implements TenantScoped {
 
-    /** Unique identifier for the course. */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "course_id")
-    private Long courseId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "course_id", updatable = false)
+    private UUID courseId;
 
-    /** Unique code for the course (e.g., CS101). */
-    @Column(name = "course_code", nullable = false, unique = true, length = 50)
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(name = "category_id")
+    private UUID categoryId;
+
+    @Column(name = "org_unit_id")
+    private UUID orgUnitId;
+
+    @Column(name = "term_id")
+    private UUID termId;
+
+    @Column(name = "course_code", nullable = false, length = 50)
     private String courseCode;
 
-    /** Full title of the course. */
+    @Column(name = "sis_source_id", length = 255)
+    private String sisSourceId;
+
     @Column(name = "course_title", nullable = false, length = 255)
     private String courseTitle;
 
-    /** Detailed description of the course. */
-    @Column(name = "course_description", columnDefinition = "TEXT")
+    @Column(name = "course_description")
     private String courseDescription;
 
-    /** Status of the course (e.g., ACTIVE, ARCHIVED, COMPLETED). */
+    @Column(name = "syllabus_html")
+    private String syllabusHtml;
+
+    @Column(name = "credit_hours", precision = 3, scale = 1)
+    private BigDecimal creditHours;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "course_level", length = 50)
+    private CourseLevel courseLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "course_type", length = 50)
+    private CourseType courseType;
+
+    @Column(name = "total_seats")
+    private Integer totalSeats;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "course_status", nullable = false, length = 20)
     private CourseStatus courseStatus;
 
-    /** Indicates whether the course is published and visible to students. */
-    @Column(name = "is_published", nullable = false)
-    private Boolean isPublished = false;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "course_kind", nullable = false, length = 20)
+    private CourseKind courseKind;
+
+    @Column(name = "date_start")
+    private OffsetDateTime dateStart;
+
+    @Column(name = "date_end")
+    private OffsetDateTime dateEnd;
+
+    @Column(name = "time_zone", length = 50)
+    private String timeZone;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "home_page_type", nullable = false, length = 20)
+    private HomePageType homePageType;
+
+    @Column(name = "course_image_url", length = 1000)
+    private String courseImageUrl;
+
+    @Column(name = "allow_self_enrollment", nullable = false)
+    private Boolean allowSelfEnrollment;
+
+    @Column(name = "self_enrollment_code", length = 50)
+    private String selfEnrollmentCode;
+
+    @Column(name = "is_public_syllabus", nullable = false)
+    private Boolean isPublicSyllabus;
+
+    @Column(name = "content_license", length = 50)
+    private String contentLicense;
+
+    @Column(name = "grading_scale_id")
+    private UUID gradingScaleId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "grade_calculation_method", nullable = false, length = 20)
+    private GradeCalculationMethod gradeCalculationMethod;
+
+    @Column(name = "final_grade_override_enabled", nullable = false)
+    private Boolean finalGradeOverrideEnabled;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "default_post_policy", nullable = false, length = 10)
+    private DefaultPostPolicy defaultPostPolicy;
+
+    @Column(name = "is_active", nullable = false)
+    private Boolean isActive;
 
     @Column(name = "is_archived", nullable = false)
-    private boolean isArchived;
-
-    /** The tenant this course belongs to, ensuring multi-tenancy. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", nullable = false)
-    private Tenant tenant;
-
-    /** The department associated with this course. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_id")
-    private Department department;
-
-    /** The start date of the course. */
-    @Column(name = "start_date", nullable = false)
-    private LocalDate startDate;
-
-    /** The end date of the course. */
-    @Column(name = "end_date", nullable = false)
-    private LocalDate endDate;
-
-    /** The enrollment start date for the course. */
-    @Column(name = "enrollment_start", nullable = false)
-    private LocalDate enrollmentStart;
-
-    /** The enrollment end date for the course. */
-    @Column(name = "enrollment_end", nullable = false)
-    private LocalDate enrollmentEnd;
-
-    /** Maximum number of enrollments allowed in the course. */
-    @Column(name = "max_enrollments")
-    private Integer maxEnrollments;
-
-    /** Visibility settings for the course (e.g., PUBLIC, PRIVATE, TENANT_ONLY). */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "visibility", nullable = false, length = 20)
-    private CourseVisibility visibility;
-
-    /** Tags associated with the course for categorization or searching. */
-    @ElementCollection
-    @CollectionTable(name = "course_tags", joinColumns = @JoinColumn(name = "course_id"))
-    @Column(name = "tag", length = 50)
-    private Set<String> tags;
-
-    /** Staff (e.g., instructors) managing this course. */
-    @ManyToMany
-    @JoinTable(
-            name = "course_staff",
-            joinColumns = @JoinColumn(name = "course_id"),
-            inverseJoinColumns = @JoinColumn(name = "staff_id")
-    )
-    private Set<Staff> staff;
-
-    /** Students enrolled in this course. */
-    @ManyToMany
-    @JoinTable(
-            name = "course_students",
-            joinColumns = @JoinColumn(name = "course_id"),
-            inverseJoinColumns = @JoinColumn(name = "student_id")
-    )
-    private Set<User> students;
-
-    /** Assignments associated with this course. */
-    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Assignment> assignments;
-
-    /** Modules defining the structure and content of this course. */
-    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<CourseModule> modules;
-
-    /** Announcements related to this course. */
-    @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Announcement> announcements;
-
-    /** Timestamp when the course was created. */
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_created", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    private Date dateCreated = new Date();
-
-    /** Timestamp when the course was last updated. */
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_updated", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
-    private Date dateUpdated = new Date();
-
-    /** The user who created the course. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by", nullable = false)
-    private User createdBy;
-
-    /** Metadata for extensibility and custom attributes. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
-
-
-    // Constructor
-    public Course(){}
-
-    public Course(Long courseId, String courseCode, String courseTitle, String courseDescription, CourseStatus courseStatus,
-                  Boolean isPublished, boolean isArchived, Tenant tenant, Department department, LocalDate startDate,
-                  LocalDate endDate, LocalDate enrollmentStart, LocalDate enrollmentEnd, Integer maxEnrollments,
-                  CourseVisibility visibility, Set<String> tags, Set<Staff> staff, Set<User> students, List<Assignment> assignments,
-                  List<CourseModule> modules, List<Announcement> announcements, Date dateCreated, Date dateUpdated,
-                  User createdBy, String metadata) {
-        this.courseId = courseId;
-        this.courseCode = courseCode;
-        this.courseTitle = courseTitle;
-        this.courseDescription = courseDescription;
-        this.courseStatus = courseStatus;
-        this.isPublished = isPublished;
-        this.isArchived = isArchived;
-        this.tenant = tenant;
-        this.department = department;
-        this.startDate = startDate;
-        this.endDate = endDate;
-        this.enrollmentStart = enrollmentStart;
-        this.enrollmentEnd = enrollmentEnd;
-        this.maxEnrollments = maxEnrollments;
-        this.visibility = visibility;
-        this.tags = tags;
-        this.staff = staff;
-        this.students = students;
-        this.assignments = assignments;
-        this.modules = modules;
-        this.announcements = announcements;
-        this.dateCreated = dateCreated;
-        this.dateUpdated = dateUpdated;
-        this.createdBy = createdBy;
-        this.metadata = metadata;
-    }
-
-    // Getter and Setter
-    public Long getCourseId() {
-        return courseId;
-    }
-
-    public void setCourseId(Long courseId) {
-        this.courseId = courseId;
-    }
-
-    public String getCourseCode() {
-        return courseCode;
-    }
-
-    public void setCourseCode(String courseCode) {
-        this.courseCode = courseCode;
-    }
-
-    public String getCourseTitle() {
-        return courseTitle;
-    }
-
-    public void setCourseTitle(String courseTitle) {
-        this.courseTitle = courseTitle;
-    }
-
-    public String getCourseDescription() {
-        return courseDescription;
-    }
-
-    public void setCourseDescription(String courseDescription) {
-        this.courseDescription = courseDescription;
-    }
-
-    public CourseStatus getCourseStatus() {
-        return courseStatus;
-    }
-
-    public void setCourseStatus(CourseStatus courseStatus) {
-        this.courseStatus = courseStatus;
-    }
-
-    public Boolean getPublished() {
-        return isPublished;
-    }
-
-    public void setPublished(Boolean published) {
-        isPublished = published;
-    }
-
-    public boolean isArchived() {
-        return isArchived;
-    }
-
-    public void setArchived(boolean archived) {
-        isArchived = archived;
-    }
-
-    public Tenant getTenant() {
-        return tenant;
-    }
-
-    public void setTenant(Tenant tenant) {
-        this.tenant = tenant;
-    }
-
-    public Department getDepartment() {
-        return department;
-    }
-
-    public void setDepartment(Department department) {
-        this.department = department;
-    }
-
-    public LocalDate getStartDate() {
-        return startDate;
-    }
-
-    public void setStartDate(LocalDate startDate) {
-        this.startDate = startDate;
-    }
-
-    public LocalDate getEndDate() {
-        return endDate;
-    }
-
-    public void setEndDate(LocalDate endDate) {
-        this.endDate = endDate;
-    }
-
-    public LocalDate getEnrollmentStart() {
-        return enrollmentStart;
-    }
-
-    public void setEnrollmentStart(LocalDate enrollmentStart) {
-        this.enrollmentStart = enrollmentStart;
-    }
-
-    public LocalDate getEnrollmentEnd() {
-        return enrollmentEnd;
-    }
-
-    public void setEnrollmentEnd(LocalDate enrollmentEnd) {
-        this.enrollmentEnd = enrollmentEnd;
-    }
-
-    public Integer getMaxEnrollments() {
-        return maxEnrollments;
-    }
-
-    public void setMaxEnrollments(Integer maxEnrollments) {
-        this.maxEnrollments = maxEnrollments;
-    }
-
-    public CourseVisibility getVisibility() {
-        return visibility;
-    }
-
-    public void setVisibility(CourseVisibility visibility) {
-        this.visibility = visibility;
-    }
-
-    public Set<String> getTags() {
-        return tags;
-    }
-
-    public void setTags(Set<String> tags) {
-        this.tags = tags;
-    }
-
-    public Set<Staff> getStaff() {
-        return staff;
-    }
-
-    public void setStaff(Set<Staff> staff) {
-        this.staff = staff;
-    }
-
-    public Set<User> getStudents() {
-        return students;
-    }
-
-    public void setStudents(Set<User> students) {
-        this.students = students;
-    }
-
-    public List<Assignment> getAssignments() {
-        return assignments;
-    }
-
-    public void setAssignments(List<Assignment> assignments) {
-        this.assignments = assignments;
-    }
-
-    public List<CourseModule> getModules() {
-        return modules;
-    }
-
-    public void setModules(List<CourseModule> modules) {
-        this.modules = modules;
-    }
-
-    public List<Announcement> getAnnouncements() {
-        return announcements;
-    }
-
-    public void setAnnouncements(List<Announcement> announcements) {
-        this.announcements = announcements;
-    }
-
-    public Date getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(Date dateCreated) {
-        this.dateCreated = dateCreated;
-    }
-
-    public Date getDateUpdated() {
-        return dateUpdated;
-    }
-
-    public void setDateUpdated(Date dateUpdated) {
-        this.dateUpdated = dateUpdated;
-    }
-
-    public User getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(User createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public String getMetadata() {
-        return metadata;
-    }
-
-    public void setMetadata(String metadata) {
-        this.metadata = metadata;
-    }
+    private Boolean isArchived;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }

@@ -1,62 +1,74 @@
-package learning_management_system.backend.entity;//package backend.chatgpt_build_lms.entity;
-//
-//import backend.chatgpt_build_lms.enums.MessageAssociatedEntityType;
-//import jakarta.persistence.*;
-//import lombok.Data;
-//
-//import java.time.LocalDateTime;
-//import java.util.HashSet;
-//import java.util.Set;
-//
-///**
-// * Represents a conversation thread in the messaging system.
-// */
-//@Data
-//@Entity
-//@Table(name = "message_thread")
-//public class MessageThread {
-//
-//    /** Unique identifier for the thread. */
-//    @Id
-//    @GeneratedValue(strategy = GenerationType.IDENTITY)
-//    @Column(name = "thread_id", nullable = false, updatable = false)
-//    private Long threadId;
-//
-//    /** Boolean indicating if the thread is a group conversation. */
-//    @Column(name = "is_group", nullable = false)
-//    private Boolean isGroup = false;
-//
-//    /** The users participating in this thread. */
-//    @ManyToMany(fetch = FetchType.LAZY)
-//    @JoinTable(
-//            name = "thread_participants",
-//            joinColumns = @JoinColumn(name = "thread_id"),
-//            inverseJoinColumns = @JoinColumn(name = "user_id")
-//    )
-//    private Set<User> participants = new HashSet<>();
-//
-//    /** Type of the associated LMS entity (e.g., Course, Assignment). */
-//    @Enumerated(EnumType.STRING)
-//    @Column(name = "associated_entity_type", nullable = true)
-//    private MessageAssociatedEntityType associatedEntityType;
-//
-//    /** ID of the associated LMS entity. */
-//    @Column(name = "associated_entity_id", nullable = true)
-//    private Long associatedEntityId;
-//
-//    /** Timestamp of the last message sent in this thread. */
-//    @Column(name = "last_message_at", nullable = true)
-//    private LocalDateTime lastMessageAt;
-//
-//    /** Boolean indicating if the thread is pinned by the user. */
-//    @Column(name = "is_pinned", nullable = false)
-//    private Boolean isPinned = false;
-//
-//    /** Boolean indicating if the thread is archived. */
-//    @Column(name = "is_archived", nullable = false)
-//    private Boolean isArchived = false;
-//
-//    /** Metadata for extensibility (e.g., custom settings, tags). */
-//    @Column(name = "metadata", columnDefinition = "TEXT")
-//    private String metadata;
-//}
+package learning_management_system.backend.entity;
+
+import jakarta.persistence.*;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.ThreadType;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+
+/**
+ * Table <b>message_thread</b> (Messaging domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
+@Entity
+@Table(name = "message_thread", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class MessageThread implements TenantScoped {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "thread_id", updatable = false)
+    private UUID threadId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(name = "thread_subject", length = 255)
+    private String threadSubject;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "thread_type", nullable = false, length = 50)
+    private ThreadType threadType;
+
+    @Column(name = "creator_id", nullable = false)
+    private UUID creatorId;
+
+    @Column(name = "is_archived")
+    private Boolean isArchived;
+
+    @Column(name = "is_muted")
+    private Boolean isMuted;
+
+    @Column(name = "last_message_id")
+    private UUID lastMessageId;
+
+    @Column(name = "last_message_at")
+    private OffsetDateTime lastMessageAt;
+
+    @Column(name = "total_messages")
+    private Integer totalMessages;
+
+    @Column(name = "total_participants")
+    private Integer totalParticipants;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
+}

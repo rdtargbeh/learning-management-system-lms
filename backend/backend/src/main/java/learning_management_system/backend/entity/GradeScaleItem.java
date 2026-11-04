@@ -1,0 +1,69 @@
+package learning_management_system.backend.entity;
+
+import jakarta.persistence.*;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+
+/**
+ * Table <b>grade_scale_item</b> (Grading & Evaluation domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
+@Entity
+@Table(name = "grade_scale_item", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class GradeScaleItem implements TenantScoped {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "item_id", updatable = false)
+    private UUID itemId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(name = "scale_id", nullable = false)
+    private UUID scaleId;
+
+    @Column(name = "item_order", nullable = false)
+    private Integer itemOrder;
+
+    @Column(name = "item_name", nullable = false, length = 50)
+    private String itemName;
+
+    @Column(name = "min_value", precision = 8, scale = 2)
+    private BigDecimal minValue;
+
+    @Column(name = "max_value", precision = 8, scale = 2)
+    private BigDecimal maxValue;
+
+    @Column(name = "percentage_min", precision = 5, scale = 2)
+    private BigDecimal percentageMin;
+
+    @Column(name = "percentage_max", precision = 5, scale = 2)
+    private BigDecimal percentageMax;
+
+    @Column(name = "gpa_value", precision = 3, scale = 2)
+    private BigDecimal gpaValue;
+
+    @Column(name = "is_passing")
+    private Boolean isPassing;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+}

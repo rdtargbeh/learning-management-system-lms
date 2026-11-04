@@ -1,80 +1,31 @@
 package learning_management_system.backend.controller;
 
 import learning_management_system.backend.dto.InstitutionDto;
-import learning_management_system.backend.entity.Institution;
+import learning_management_system.backend.dto.UpdateInstitutionRequest;
 import learning_management_system.backend.service.InstitutionService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.http.ResponseEntity;
+
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.UUID;
 
+/** institution: the caller's own institution record, and any institution's for platform admins. */
 @RestController
-@RequestMapping("/api/institutions")
+@RequestMapping("/api/v1")
 public class InstitutionController {
+    private final InstitutionService institutions;
 
-    @Autowired
-    private InstitutionService institutionService;
+    public InstitutionController(InstitutionService institutions) { this.institutions = institutions; }
 
+    @GetMapping("/tenant/institution")
+    public InstitutionDto mine() { return institutions.get(null); }
 
-    @PostMapping
-    public ResponseEntity<InstitutionDto> createInstitution(@RequestBody InstitutionDto institutionDto) {
-        return ResponseEntity.ok(institutionService.createInstitution(institutionDto));
-    }
+    @PatchMapping("/tenant/institution")
+    public InstitutionDto updateMine(@Valid @RequestBody UpdateInstitutionRequest r) { return institutions.update(null, r); }
 
-    @PutMapping("/{institutionId}")
-    public ResponseEntity<InstitutionDto> updateInstitution(@PathVariable Long institutionId, @RequestBody InstitutionDto institutionDto) {
-        return ResponseEntity.ok(institutionService.updateInstitution(institutionId, institutionDto));
-    }
+    @GetMapping("/platform/tenants/{tenantId}/institution")
+    public InstitutionDto get(@PathVariable UUID tenantId) { return institutions.get(tenantId); }
 
-    @GetMapping("/{institutionId}")
-    public ResponseEntity<InstitutionDto> getInstitutionById(@PathVariable Long institutionId) {
-        return ResponseEntity.ok(institutionService.getInstitutionById(institutionId));
-    }
-
-    @GetMapping
-    public ResponseEntity<List<InstitutionDto>> getAllInstitutions() {
-        return ResponseEntity.ok(institutionService.getAllInstitutions());
-    }
-
-    @DeleteMapping("/{institutionId}")
-    public ResponseEntity<Void> deleteInstitution(@PathVariable Long institutionId) {
-        institutionService.deleteInstitution(institutionId);
-        return ResponseEntity.noContent().build();
-    }
-
-    // Build A Get Tenants By Theme REST API
-    @GetMapping("/theme")
-    public ResponseEntity<List<InstitutionDto>> getInstitutionsByTheme(@RequestParam String theme) {
-        return ResponseEntity.ok(institutionService.getInstitutionsByTheme(theme));
-    }
-
-
-    @GetMapping("/billing-address")
-    public ResponseEntity<List<InstitutionDto>> getInstitutionsByBillingAddress(@RequestParam String billingAddress) {
-        return ResponseEntity.ok(institutionService.getInstitutionsByBillingAddress(billingAddress));
-    }
-
-    @GetMapping("/active-region")
-    public ResponseEntity<List<InstitutionDto>> getActiveInstitutionsByRegionAndMinUsers(
-            @RequestParam String region, @RequestParam Integer minUsers) {
-        return ResponseEntity.ok(institutionService.getActiveInstitutionsByRegionAndMinUsers(region, minUsers));
-    }
-
-    // Build A Get Tenants By Region REST API
-    @GetMapping("/region/{region}")
-    public Page<Institution> getInstitutionsByRegion(
-            @PathVariable String region,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return institutionService.getInstitutionsByRegion(region, page, size);
-    }
-
-//    @GetMapping("/region/{region}")
-//    public ResponseEntity<List<InstitutionDto>> getInstitutionsByRegion(@PathVariable String region) {
-//        return ResponseEntity.ok(institutionService.getInstitutionsByRegion(region));
-//    }
-
-
+    @PatchMapping("/platform/tenants/{tenantId}/institution")
+    public InstitutionDto update(@PathVariable UUID tenantId, @Valid @RequestBody UpdateInstitutionRequest r) { return institutions.update(tenantId, r); }
 }

@@ -1,34 +1,19 @@
 package learning_management_system.backend.service;
 
 import learning_management_system.backend.dto.InstitutionDto;
-import learning_management_system.backend.entity.Institution;
-import org.springframework.data.domain.Page;
+import learning_management_system.backend.dto.UpdateInstitutionRequest;
 
-import java.util.List;
+import java.util.UUID;
 
-/**
- * Service interface for Institution operations.
- */
+/** institution: the organisation behind a tenant (name, code, country, type, website, logo). One per tenant. */
 public interface InstitutionService {
 
-    InstitutionDto createInstitution(InstitutionDto institutionDto);
+    /** Any signed-in member reads their own institution (tenantId null); platform admins read any institution. */
+    InstitutionDto get(UUID tenantId);
 
-    InstitutionDto updateInstitution(Long institutionId, InstitutionDto institutionDto);
-
-    InstitutionDto getInstitutionById(Long institutionId);
-
-    List<InstitutionDto> getAllInstitutions();
-
-    void deleteInstitution(Long institutionId);
-
-    List<InstitutionDto> getInstitutionsByTheme(String theme);
-
-    List<InstitutionDto> getInstitutionsByBillingAddress(String billingAddress);
-
-    List<InstitutionDto> getActiveInstitutionsByRegionAndMinUsers(String region, Integer minUsers);
-
-    Page<Institution> getInstitutionsByRegion(String region, int page, int size);
-
-//    List<InstitutionDto> getInstitutionsByRegion(String region);
-
+    /**
+     * PATCH (TENANT_SETTINGS_MANAGE for the own institution; platform admins for any). Creates the record when the
+     * tenant has none yet; then institutionName is required. Only platform admins change institutionCode.
+     */
+    InstitutionDto update(UUID tenantId, UpdateInstitutionRequest r);
 }

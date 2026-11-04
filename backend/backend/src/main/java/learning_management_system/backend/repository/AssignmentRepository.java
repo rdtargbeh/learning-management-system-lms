@@ -6,22 +6,20 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
-
+import java.util.UUID;
 
 @Repository
-public interface AssignmentRepository extends JpaRepository<Assignment, Long> {
+public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
 
-    @Query("SELECT a FROM Assignment a JOIN a.assignedStudents u WHERE u.userId = :userId")
-    List<Assignment> findAssignmentsByUserId(@Param("userId") Long userId);
+    List<Assignment> findByCourseIdOrderByDateDueAscAssignmentTitleAsc(UUID courseId);
 
-    List<Assignment> findByCourse_CourseId(Long courseId);
+    List<Assignment> findByModuleIdIn(Collection<UUID> moduleIds);
 
-//    List<Assignment> findByAssignedStudents_StudentId(Long studentId);
+    /** Assignments and content share one order inside a module. */
+    @Query("select coalesce(max(a.displayOrder), 0) from Assignment a where a.moduleId = :moduleId")
+    int maxDisplayOrderInModule(@Param("moduleId") UUID moduleId);
 
-    List<Assignment> findByCreatedBy_UserId(Long userId);
-
-    Optional<Assignment> findById(Long id);
-
+    boolean existsByGroupSetId(UUID groupSetId);
 }

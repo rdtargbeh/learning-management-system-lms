@@ -1,42 +1,42 @@
 package learning_management_system.backend.service;
 
+import learning_management_system.backend.dto.AddModuleRequirementRequest;
 import learning_management_system.backend.dto.CourseModuleDto;
+import learning_management_system.backend.dto.CreateCourseModuleRequest;
+import learning_management_system.backend.dto.ModulePrerequisitesRequest;
+import learning_management_system.backend.dto.ModuleStudentProgressDto;
+import learning_management_system.backend.dto.ModuleViewDto;
+import learning_management_system.backend.dto.ReorderRequest;
+import learning_management_system.backend.dto.UpdateCourseModuleRequest;
 
 import java.util.List;
-import java.util.Set;
+import java.util.UUID;
 
+/**
+ * Course modules (Canvas Modules / Blackboard learning modules). Teachers build, order and publish modules, set
+ * prerequisites and completion requirements; students see published modules with their own progress and locks.
+ */
 public interface CourseModuleService {
-    List<CourseModuleDto> getAllModules();
 
-    List<CourseModuleDto> getModulesByCourseId(Long courseId);
+    /** Staff see every module and item; students see published ones with their progress. */
+    List<ModuleViewDto> list(UUID courseId);
 
-    CourseModuleDto getModuleById(Long moduleId);
+    ModuleViewDto get(UUID moduleId);
 
-    CourseModuleDto createModule(CourseModuleDto moduleDto);
+    CourseModuleDto create(UUID courseId, CreateCourseModuleRequest r);
 
-    CourseModuleDto updateModule(Long moduleId, CourseModuleDto moduleDto);
+    CourseModuleDto update(UUID moduleId, UpdateCourseModuleRequest r);
 
-    void deleteModule(Long moduleId);
+    /** Publishing can also publish every item in the module. */
+    CourseModuleDto setPublished(UUID moduleId, boolean published, boolean includeItems);
 
-    List<CourseModuleDto> getPublishedModulesByCourseId(Long courseId);
+    /** Deletes the module; its items stay in the course, outside any module. */
+    void delete(UUID moduleId);
 
-    CourseModuleDto getModuleDetails(Long moduleId);
+    List<ModuleViewDto> reorder(UUID courseId, ReorderRequest r);
 
-    boolean arePrerequisitesMet(Long moduleId, Set<Long> completedModuleIds);
+    ModuleViewDto reorderItems(UUID moduleId, ReorderRequest r);
 
-    boolean isModuleComplete(Long moduleId, Set<Long> completedContentIds);
-
-    void incrementVersion(Long moduleId);
-
-    /**
-     * Checks if a module is released based on the current time.
-     *
-     * @param moduleId the ID of the module.
-     * @return true if the module is released, false otherwise.
-     */
-    boolean isModuleReleased(Long moduleId, Set<Long> completedModuleIds);
-
-    CourseModuleDto updatePrerequisitesAndConditions(Long moduleId, Boolean requiresPrerequisites, String releaseCondition);
-
+    /** The module with its prerequisites and requirements (no permission check). */
+    CourseModuleDto dto(UUID moduleId);
 }
-

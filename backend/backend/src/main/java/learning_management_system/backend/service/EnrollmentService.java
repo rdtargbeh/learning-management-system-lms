@@ -1,46 +1,30 @@
 package learning_management_system.backend.service;
 
-import learning_management_system.backend.dto.EnrollmentAnalyticsDto;
+import learning_management_system.backend.dto.CreateEnrollmentRequest;
 import learning_management_system.backend.dto.EnrollmentDto;
-import learning_management_system.backend.entity.User;
 import learning_management_system.backend.enums.EnrollmentStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import learning_management_system.backend.enums.EnrollmentType;
 
 import java.util.List;
+import java.util.UUID;
 
+/**
+ * Enrollments. Section teachers and ENROLLMENT_MANAGE can enroll and withdraw; students can join with a course's
+ * self-enrollment code and drop enrollments they made themselves. Seat limits and the waitlist are applied
+ * automatically.
+ */
 public interface EnrollmentService {
 
-    EnrollmentDto enrollStudentWithNotification(EnrollmentDto enrollmentDto, User loggedInUser);
+    EnrollmentDto enroll(UUID sectionId, CreateEnrollmentRequest r);
 
-//    EnrollmentDto createEnrollment(EnrollmentDto enrollmentDto, User loggedInUser);
+    /** Joins the first open section with a free seat of the course that has this code. */
+    EnrollmentDto selfEnroll(String code);
 
-    EnrollmentDto updateEnrollmentStatusWithNotification(Long courseId, Long studentId, EnrollmentStatus status, User loggedInUser);
+    List<EnrollmentDto> roster(UUID sectionId, EnrollmentStatus status, EnrollmentType type);
 
-    List<EnrollmentDto> getEnrollmentsByCourseId(Long courseId);
+    List<EnrollmentDto> forUser(UUID userId);
 
-    List<EnrollmentDto> getEnrollmentsByStudentId(Long studentId);
+    EnrollmentDto get(UUID enrollmentId);
 
-    void unEnrollStudent(Long courseId, Long studentId);
-
-    EnrollmentDto getEnrollmentDetails(Long courseId, Long studentId);
-
-    Page<EnrollmentDto> getEnrollmentsByCourse(Long courseId, Pageable pageable);
-
-    Page<EnrollmentDto> getEnrollmentsByStudent(Long studentId, Pageable pageable);
-
-    List<EnrollmentDto> batchEnrollStudents(Long courseId, List<Long> studentIds, User adminUser);
-
-    EnrollmentAnalyticsDto getEnrollmentAnalytics(Long courseId);
-
-
-
-
-//    EnrollmentDto createEnrollment(EnrollmentDto enrollmentDto);
-
-//    void updateEnrollmentStatus(Long enrollmentId, String status);
-
-//    void deleteEnrollment(Long enrollmentId);
-
-
+    EnrollmentDto changeStatus(UUID enrollmentId, EnrollmentStatus status);
 }

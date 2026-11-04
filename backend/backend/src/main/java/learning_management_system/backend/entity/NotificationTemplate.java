@@ -1,109 +1,59 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
 
-import java.util.Date;
-
-@CrossOrigin("*")
+/**
+ * Table <b>notification_template</b> (Notifications & Alerts domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
 @Entity
-@Table(name = "notification_templates")
-public class NotificationTemplate {
+@Table(name = "notification_template", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class NotificationTemplate implements TenantScoped {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "template_id", nullable = false, updatable = false)
-    private Long templateId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "template_id", updatable = false)
+    private UUID templateId;
 
-    @Column(name = "name", nullable = false, unique = true, length = 100)
-    private String name; // Template name
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    @Column(name = "content", nullable = false, columnDefinition = "TEXT")
-    private String content; // Template content with placeholders (e.g., "Hello {name}")
+    @Column(name = "template_name", nullable = false, length = 100)
+    private String templateName;
 
-    @Column(name = "description", length = 255)
-    private String description; // Optional description of the template
+    @Column(name = "template_category", length = 50)
+    private String templateCategory;
 
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata; // Optional JSON for additional data
+    @Column(name = "subject_template", nullable = false)
+    private String subjectTemplate;
 
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_created", nullable = false, updatable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
-    private Date dateCreated = new Date();
+    @Column(name = "body_template", nullable = false)
+    private String bodyTemplate;
 
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_updated", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
-    private Date dateUpdated = new Date();
+    @Column(name = "icon_url", length = 500)
+    private String iconUrl;
 
+    @Column(name = "is_active")
+    private Boolean isActive;
 
-    public NotificationTemplate() {
-    }
-
-    public NotificationTemplate(Long templateId, String name, String content, String description, String metadata, Date dateCreated, Date dateUpdated) {
-        this.templateId = templateId;
-        this.name = name;
-        this.content = content;
-        this.description = description;
-        this.metadata = metadata;
-        this.dateCreated = dateCreated;
-        this.dateUpdated = dateUpdated;
-    }
-
-
-    public Long getTemplateId() {
-        return templateId;
-    }
-
-    public void setTemplateId(Long templateId) {
-        this.templateId = templateId;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public String getContent() {
-        return content;
-    }
-
-    public void setContent(String content) {
-        this.content = content;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public String getMetadata() {
-        return metadata;
-    }
-
-    public void setMetadata(String metadata) {
-        this.metadata = metadata;
-    }
-
-    public Date getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(Date dateCreated) {
-        this.dateCreated = dateCreated;
-    }
-
-    public Date getDateUpdated() {
-        return dateUpdated;
-    }
-
-    public void setDateUpdated(Date dateUpdated) {
-        this.dateUpdated = dateUpdated;
-    }
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
 }
-

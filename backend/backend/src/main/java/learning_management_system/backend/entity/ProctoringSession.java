@@ -1,159 +1,92 @@
 package learning_management_system.backend.entity;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.*;
-import learning_management_system.backend.enums.ProctoringStatus;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.enums.ProctoringSessionReviewStatus;
+import learning_management_system.backend.enums.ProctoringSessionStatus;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
-import java.util.Date;
-
-@CrossOrigin("*")
+/**
+ * Table <b>proctoring_session</b> (Assessment & Testing domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
 @Entity
-@Table(name = "proctoring_sessions")
-public class ProctoringSession {
+@Table(name = "proctoring_session", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class ProctoringSession implements TenantScoped {
 
-    /** Unique identifier for the proctoring session. */
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "proctoring_session_id")
-    private Long proctoringSessionId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "proctoring_session_id", updatable = false)
+    private UUID proctoringSessionId;
 
-    /** The assessment linked to this proctoring session. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assessment_id", nullable = false)
-    private Assessment assessment;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    /** The student who is being proctored. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "student_id", nullable = false)
-    private Student student;
+    @Column(name = "attempt_id", nullable = false)
+    private UUID attemptId;
 
-    /** Status of the proctoring session (e.g., INITIATED, IN_PROGRESS, APPROVED, REJECTED). */
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
+    @Column(name = "provider", length = 50)
+    private String provider;
+
+    @Column(name = "provider_session_ref", length = 255)
+    private String providerSessionRef;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    private ProctoringStatus status;
+    @Column(name = "session_status", nullable = false, length = 20)
+    private ProctoringSessionStatus sessionStatus;
 
-    /** Start time of the proctoring session. */
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "start_time", nullable = false)
-    private Date startTime;
+    @Column(name = "date_start")
+    private OffsetDateTime dateStart;
 
-    /** End time of the proctoring session. */
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "end_time")
-    private Date endTime;
+    @Column(name = "date_end")
+    private OffsetDateTime dateEnd;
 
-    /** Metadata for extensibility. */
-    @Column(name = "metadata", columnDefinition = "TEXT")
-    private String metadata;
+    @Column(name = "recording_file_id")
+    private UUID recordingFileId;
 
-    /** Timestamp for when the proctoring session was created. */
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_created", nullable = false, updatable = false)
-    private Date dateCreated = new Date();
+    @Column(name = "violation_count", nullable = false)
+    private Integer violationCount;
 
-    /** Timestamp for when the proctoring session was last updated. */
-    @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "date_updated", columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
-    private Date dateUpdated = new Date();
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "violations")
+    private JsonNode violations;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_status", length = 20)
+    private ProctoringSessionReviewStatus reviewStatus;
 
-    // Utility method to update status
-    public void updateStatus(ProctoringStatus newStatus) {
-        this.status = newStatus;
-        this.dateUpdated = new Date(); // Update timestamp
-    }
+    @Column(name = "reviewed_by")
+    private UUID reviewedBy;
 
-    // Utility method to check readiness
-    public boolean isReadyForValidation() {
-        return this.startTime != null && this.metadata != null && !this.metadata.isEmpty();
-    }
+    @Column(name = "date_reviewed")
+    private OffsetDateTime dateReviewed;
 
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
 
-    public ProctoringSession(){}
-
-    public ProctoringSession(Long proctoringSessionId, Assessment assessment, Student student, ProctoringStatus status, Date startTime, Date endTime, String metadata, Date dateCreated, Date dateUpdated) {
-        this.proctoringSessionId = proctoringSessionId;
-        this.assessment = assessment;
-        this.student = student;
-        this.status = status;
-        this.startTime = startTime;
-        this.endTime = endTime;
-        this.metadata = metadata;
-        this.dateCreated = dateCreated;
-        this.dateUpdated = dateUpdated;
-    }
-
-    // Getters and Setters
-
-    public Long getProctoringSessionId() {
-        return proctoringSessionId;
-    }
-
-    public void setProctoringSessionId(Long proctoringSessionId) {
-        this.proctoringSessionId = proctoringSessionId;
-    }
-
-    public Assessment getAssessment() {
-        return assessment;
-    }
-
-    public void setAssessment(Assessment assessment) {
-        this.assessment = assessment;
-    }
-
-    public Student getStudent() {
-        return student;
-    }
-
-    public void setStudent(Student student) {
-        this.student = student;
-    }
-
-    public ProctoringStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(ProctoringStatus status) {
-        this.status = status;
-    }
-
-    public Date getStartTime() {
-        return startTime;
-    }
-
-    public void setStartTime(Date startTime) {
-        this.startTime = startTime;
-    }
-
-    public Date getEndTime() {
-        return endTime;
-    }
-
-    public void setEndTime(Date endTime) {
-        this.endTime = endTime;
-    }
-
-    public String getMetadata() {
-        return metadata;
-    }
-
-    public void setMetadata(String metadata) {
-        this.metadata = metadata;
-    }
-
-    public Date getDateCreated() {
-        return dateCreated;
-    }
-
-    public void setDateCreated(Date dateCreated) {
-        this.dateCreated = dateCreated;
-    }
-
-    public Date getDateUpdated() {
-        return dateUpdated;
-    }
-
-    public void setDateUpdated(Date dateUpdated) {
-        this.dateUpdated = dateUpdated;
-    }
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
 }

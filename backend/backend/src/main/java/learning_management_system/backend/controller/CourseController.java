@@ -1,133 +1,73 @@
 package learning_management_system.backend.controller;
 
 import learning_management_system.backend.dto.CourseDto;
-import learning_management_system.backend.dto.UserDto;
+import learning_management_system.backend.dto.CreateCourseRequest;
+import learning_management_system.backend.dto.MyCourseDto;
+import learning_management_system.backend.dto.PageResponse;
+import learning_management_system.backend.dto.SelfEnrollmentSettingsRequest;
+import learning_management_system.backend.dto.UpdateCourseRequest;
 import learning_management_system.backend.enums.CourseStatus;
 import learning_management_system.backend.service.CourseService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
+/** Courses and their life cycle. */
 @RestController
-@RequestMapping("/api/courses")
+@RequestMapping("/api/v1/courses")
 public class CourseController {
+    private final CourseService courses;
 
-    @Autowired
-    private CourseService courseService;
+    public CourseController(CourseService courses) { this.courses = courses; }
 
-
-// Build A Get All Course REST API
-    @GetMapping
-    public ResponseEntity<List<CourseDto>> getAllCourses() {
-        return ResponseEntity.ok(courseService.getAllCourses());
-    }
-
-    // Build A Get Course By ID REST API
-    @GetMapping("/{courseId}")
-    public ResponseEntity<CourseDto> getCourseById(@PathVariable Long id) {
-        return ResponseEntity.ok(courseService.getCourseById(id));
-    }
-
-    // Build A Create Course REST API
     @PostMapping
-    public ResponseEntity<CourseDto> createCourse(@RequestBody CourseDto courseDto) {
-        return ResponseEntity.ok(courseService.createCourse(courseDto));
+    @ResponseStatus(HttpStatus.CREATED)
+    public CourseDto create(@Valid @RequestBody CreateCourseRequest r) { return courses.create(r); }
+
+    /** Catalog search (COURSE_READ). */
+    @GetMapping
+    public PageResponse<CourseDto> search(@RequestParam(required = false) UUID termId,
+                                          @RequestParam(required = false) CourseStatus status,
+                                          @RequestParam(required = false) UUID categoryId,
+                                          @RequestParam(required = false) UUID orgUnitId,
+                                          @RequestParam(required = false) String q,
+                                          @RequestParam(defaultValue = "0") int page,
+                                          @RequestParam(defaultValue = "50") int size) {
+        return courses.search(termId, status, categoryId, orgUnitId, q, page, size);
     }
 
-    // Build An Update Course REST API
-    @PutMapping("/{courseId}")
-    public ResponseEntity<CourseDto> updateCourse(@PathVariable Long id, @RequestBody CourseDto courseDto) {
-        return ResponseEntity.ok(courseService.updateCourse(id, courseDto));
+    /** The caller's dashboard: courses they teach or take. */
+    @GetMapping("/mine")
+    public List<MyCourseDto> mine() { return courses.mine(); }
+
+    @GetMapping("/{courseId}")
+    public CourseDto get(@PathVariable UUID courseId) { return courses.get(courseId); }
+
+    @PatchMapping("/{courseId}")
+    public CourseDto update(@PathVariable UUID courseId, @Valid @RequestBody UpdateCourseRequest r) { return courses.update(courseId, r); }
+
+    @PostMapping("/{courseId}/publish")
+    public CourseDto publish(@PathVariable UUID courseId) { return courses.changeStatus(courseId, CourseStatus.PUBLISHED); }
+
+    @PostMapping("/{courseId}/unpublish")
+    public CourseDto unpublish(@PathVariable UUID courseId) { return courses.changeStatus(courseId, CourseStatus.UNPUBLISHED); }
+
+    @PostMapping("/{courseId}/conclude")
+    public CourseDto conclude(@PathVariable UUID courseId) { return courses.changeStatus(courseId, CourseStatus.CONCLUDED); }
+
+    @PostMapping("/{courseId}/archive")
+    public CourseDto archive(@PathVariable UUID courseId) { return courses.changeStatus(courseId, CourseStatus.ARCHIVED); }
+
+    /** Brings an archived course back as unpublished. */
+    @PostMapping("/{courseId}/unarchive")
+    public CourseDto unarchive(@PathVariable UUID courseId) { return courses.changeStatus(courseId, CourseStatus.UNPUBLISHED); }
+
+    @PutMapping("/{courseId}/self-enrollment")
+    public CourseDto selfEnrollment(@PathVariable UUID courseId, @Valid @RequestBody SelfEnrollmentSettingsRequest r) {
+        return courses.selfEnrollment(courseId, r);
     }
-
-    // Build A Delete Course REST API
-    @DeleteMapping("/{courseId}")
-    public ResponseEntity<Void> deleteCourse(@PathVariable Long id) {
-        courseService.deleteCourse(id);
-        return ResponseEntity.noContent().build();
-    }
-
-// Combine both published and all-published methods
-    @GetMapping("/published")
-    public ResponseEntity<List<CourseDto>> getPublishedCourses(@RequestParam(required = false) Boolean isPublished) {
-        if (isPublished == null) {
-            // Fetch all published courses
-            return ResponseEntity.ok(courseService.getPublishedCourses());
-        } else {
-            // Fetch courses filtered by published status
-            return ResponseEntity.ok(courseService.getPublishedCourses(isPublished));
-        }
-    }
-
-    @GetMapping("/teacher/{teacherId}")
-    public ResponseEntity<List<CourseDto>> getCoursesByTeacherId(@PathVariable Long teacherId) {
-        return ResponseEntity.ok(courseService.getCoursesByTeacherId(teacherId));
-    }
-
-    @GetMapping("/student/{studentId}")
-    public ResponseEntity<List<CourseDto>> getCoursesByStudentId(@PathVariable Long studentId) {
-        return ResponseEntity.ok(courseService.getCoursesByStudentId(studentId));
-    }
-
-
-    @GetMapping("/tenant/{tenantId}")
-    public ResponseEntity<List<CourseDto>> getCoursesByTenant(@PathVariable Long tenantId) {
-        return ResponseEntity.ok(courseService.getCoursesByTenant(tenantId));
-    }
-
-    @GetMapping("/departmentId")
-    public ResponseEntity<List<CourseDto>> getCourseByDepartment(@PathVariable Long departmentId){
-        return ResponseEntity.ok(courseService.getCoursesByDepartment(departmentId));
-    }
-
-    @GetMapping("/department/{departmentId}")
-    public ResponseEntity<List<CourseDto>> getActiveCourses(){
-        return ResponseEntity.ok(courseService.getActiveCourses());
-    }
-
-    @GetMapping("/{courseId}/students")
-    public ResponseEntity<List<UserDto>> getEnrolledStudents(@PathVariable Long courseId) {
-        return ResponseEntity.ok(courseService.getEnrolledStudents(courseId));
-    }
-
-    @GetMapping("/courses/created-by/{userId}")
-    public ResponseEntity<List<CourseDto>> getCoursesCreatedByUser(@PathVariable Long userId) {
-        return ResponseEntity.ok(courseService.getCoursesCreatedByUser(userId));
-    }
-
-
-    /**
-     * Count courses for a specific tenant.
-     *
-     * @param tenantId The ID of the tenant.
-     * @return The total number of courses for the tenant.
-     */
-    @GetMapping("/count-by-tenant/{tenantId}")
-    public ResponseEntity<Long> countCoursesByTenantId(@PathVariable Long tenantId) {
-        return ResponseEntity.ok(courseService.countCoursesByTenantId(tenantId));
-    }
-
-    /**
-     * Find courses by status.
-     *
-     * @param status The status of the courses to retrieve.
-     * @return A list of courses with the given status.
-     */
-    @GetMapping("/status/{status}")
-    public ResponseEntity<List<CourseDto>> findByCourseStatus(@PathVariable CourseStatus status) {
-        return ResponseEntity.ok(courseService.findByCourseStatus(status));
-    }
-
-    //    @GetMapping("/published")
-//    public ResponseEntity<List<CourseDto>> getPublishedCourses(@RequestParam Boolean isPublished) {
-//        return ResponseEntity.ok(courseService.getPublishedCourses(isPublished));
-//    }
-
-//    @GetMapping("/all-published")
-//    public ResponseEntity<List<CourseDto>> getPublishedCourses() {
-//        return ResponseEntity.ok(courseService.getPublishedCourses());
-//    }
-
 }

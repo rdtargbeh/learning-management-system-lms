@@ -1,95 +1,59 @@
 package learning_management_system.backend.mapper;
 
+import learning_management_system.backend.config.MapStructConfig;
 import learning_management_system.backend.dto.AssignmentDto;
+import learning_management_system.backend.dto.AssignmentOverrideDto;
+import learning_management_system.backend.dto.CommentLibraryItemDto;
+import learning_management_system.backend.dto.CreateAssignmentOverrideRequest;
+import learning_management_system.backend.dto.CreateAssignmentRequest;
+import learning_management_system.backend.dto.FeedbackDto;
+import learning_management_system.backend.dto.PeerReviewDto;
+import learning_management_system.backend.dto.SubmissionDto;
+import learning_management_system.backend.dto.UpdateAssignmentRequest;
 import learning_management_system.backend.entity.Assignment;
-import learning_management_system.backend.entity.Attachment;
-import org.springframework.stereotype.Component;
+import learning_management_system.backend.entity.AssignmentOverride;
+import learning_management_system.backend.entity.AssignmentPeerReview;
+import learning_management_system.backend.entity.AssignmentSubmission;
+import learning_management_system.backend.entity.CommentLibraryItem;
+import learning_management_system.backend.entity.Feedback;
+import org.mapstruct.BeanMapping;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
+import org.mapstruct.MappingTarget;
+import org.mapstruct.NullValuePropertyMappingStrategy;
 
-import java.util.stream.Collectors;
+import java.util.UUID;
 
-@Component
-public class AssignmentMapper {
+/** assignment, assignment_override, assignment_submission, feedback, assignment_peer_review, comment_library_item. */
+@Mapper(config = MapStructConfig.class)
+public interface AssignmentMapper {
 
-    /**
-     * Converts an `Assignment` entity to an `AssignmentDto`.
-     * @param assignment The `Assignment` entity.
-     * @return The corresponding `AssignmentDto`.
-     */
-    public AssignmentDto toDto(Assignment assignment) {
-        if (assignment == null) {
-            return null;
-        }
+    AssignmentDto toDto(Assignment assignment);
 
-        AssignmentDto dto = new AssignmentDto();
-        dto.setAssignmentId(assignment.getAssignmentId());
-        dto.setTitle(assignment.getTitle());
-        dto.setDescription(assignment.getDescription());
-        dto.setDueDate(assignment.getDueDate());
-        dto.setAvailableFrom(assignment.getAvailableFrom());
-        dto.setAvailableUntil(assignment.getAvailableUntil());
-        dto.setPublished(assignment.getPublished());
-        dto.setActive(assignment.getActive());
-        dto.setEnablePeerReviews(assignment.getEnablePeerReviews());
-        dto.setCompletionRate(assignment.getCompletionRate());
-        dto.setAverageGrade(assignment.getAverageGrade());
-        dto.setSubmissionType(assignment.getSubmissionType());
-        dto.setAssignmentType(assignment.getAssignmentType());
-        dto.setGradingId(assignment.getGrading() != null ? assignment.getGrading().getGradingId() : null);
-        dto.setMaxAttempts(assignment.getMaxAttempts());
-        dto.setGracePeriodMinutes(assignment.getGracePeriodMinutes());
-        dto.setVisibility(assignment.getVisibility());
-        dto.setCourseId(assignment.getCourse() != null ? assignment.getCourse().getCourseId() : null);
-        dto.setModuleId(assignment.getModule() != null ? assignment.getModule().getModuleId() : null);
-        dto.setStudentGroupId(assignment.getStudentGroup() != null ? assignment.getStudentGroup().getGroupId() : null);
-        dto.setAssignedStudentIds(assignment.getAssignedStudents() != null ?
-                assignment.getAssignedStudents().stream()
-                        .map(student -> student.getUserId()) // Explicit lambda to avoid method reference issues
-                        .collect(Collectors.toSet()) : null);
+    Assignment toEntity(CreateAssignmentRequest request);
 
-        dto.setInstructions(assignment.getInstructions());
-        dto.setStatus(assignment.getStatus());
-        dto.setGradingCompleted(assignment.getGradingCompleted());
-        dto.setCreatedBy(assignment.getCreatedBy() != null ? assignment.getCreatedBy().getUserId() : null);
-        dto.setMetadata(assignment.getMetadata());
-        dto.setAttachmentIds(assignment.getAttachments() != null ?
-                assignment.getAttachments().stream().map(Attachment::getAttachmentId).collect(Collectors.toList()) : null);
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    void updateEntity(UpdateAssignmentRequest request, @MappingTarget Assignment assignment);
 
-        return dto;
-    }
+    AssignmentOverrideDto toDto(AssignmentOverride override);
 
-    /**
-     * Converts an `AssignmentDto` to an `Assignment` entity.
-     * @param dto The `AssignmentDto`.
-     * @return The corresponding `Assignment` entity.
-     */
-    public Assignment toEntity(AssignmentDto dto) {
-        if (dto == null) {
-            return null;
-        }
+    AssignmentOverride toEntity(CreateAssignmentOverrideRequest request);
 
-        Assignment assignment = new Assignment();
-        assignment.setAssignmentId(dto.getAssignmentId());
-        assignment.setTitle(dto.getTitle());
-        assignment.setDescription(dto.getDescription());
-        assignment.setDueDate(dto.getDueDate());
-        assignment.setAvailableFrom(dto.getAvailableFrom());
-        assignment.setAvailableUntil(dto.getAvailableUntil());
-        assignment.setPublished(dto.getPublished());
-        assignment.setActive(dto.getActive());
-        assignment.setEnablePeerReviews(dto.getEnablePeerReviews());
-        assignment.setCompletionRate(dto.getCompletionRate());
-        assignment.setAverageGrade(dto.getAverageGrade());
-        assignment.setSubmissionType(dto.getSubmissionType());
-        assignment.setAssignmentType(dto.getAssignmentType());
-        assignment.setMaxAttempts(dto.getMaxAttempts());
-        assignment.setGracePeriodMinutes(dto.getGracePeriodMinutes());
-        assignment.setVisibility(dto.getVisibility());
-        assignment.setInstructions(dto.getInstructions());
-        assignment.setStatus(dto.getStatus());
-        assignment.setGradingCompleted(dto.getGradingCompleted());
-        assignment.setMetadata(dto.getMetadata());
+    FeedbackDto toDto(Feedback feedback);
 
-        return assignment;
-    }
+    @Mapping(target = "username", source = "username")
+    @Mapping(target = "displayName", source = "displayName")
+    @Mapping(target = "feedback", source = "feedback")
+    @Mapping(target = "dateUpdated", source = "submission.dateUpdated")
+    SubmissionDto toDto(AssignmentSubmission submission, String username, String displayName, FeedbackDto feedback);
+
+    @Mapping(target = "reviewerName", source = "reviewerName")
+    @Mapping(target = "revieweeId", source = "revieweeId")
+    @Mapping(target = "revieweeName", source = "revieweeName")
+    @Mapping(target = "submissionText", source = "submissionText")
+    @Mapping(target = "submissionUrl", source = "submissionUrl")
+    PeerReviewDto toDto(AssignmentPeerReview review, String reviewerName, UUID revieweeId, String revieweeName,
+                        String submissionText, String submissionUrl);
+
+    CommentLibraryItemDto toDto(CommentLibraryItem item);
 }
-

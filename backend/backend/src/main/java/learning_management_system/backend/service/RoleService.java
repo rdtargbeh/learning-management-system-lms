@@ -1,56 +1,22 @@
 package learning_management_system.backend.service;
 
-import learning_management_system.backend.dto.PermissionDto;
+import learning_management_system.backend.dto.CreateRoleRequest;
 import learning_management_system.backend.dto.RoleDto;
-import learning_management_system.backend.entity.Role;
-import learning_management_system.backend.entity.User;
-import learning_management_system.backend.enums.RoleType;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import learning_management_system.backend.dto.UpdateRoleRequest;
 
 import java.util.List;
-import java.util.Set;
+import java.util.UUID;
 
+/** roles: the institution's roles. Shared role templates (tenant_id NULL) are read-only here. */
 public interface RoleService {
 
-    List<Role> getAllRoles();
+    List<RoleDto> list();
 
-//    RoleDto createRole(RoleDto roleDto);
+    RoleDto get(UUID roleId);
 
-    void deleteRole(Long roleId);
+    /** Creates a role, optionally with its permissions (stored through role_permissions). */
+    RoleDto create(CreateRoleRequest r);
 
-    Set<User> getUsersByRoleId(Long roleId);
-
-    RoleDto updateRole(Long roleId, RoleDto roleDto);
-
-    RoleDto getRoleById(Long roleId);
-
-    List<RoleDto> getRolesByTenant(Long tenantId);
-
-    List<RoleDto> getRolesByType(RoleType roleType);
-
-    void assignPermissionsToRole(Long roleId, List<Long> permissionIds);
-
-    Set<PermissionDto> getEffectivePermissions(Long roleId);
-
-    void removePermissionsFromRole(Long roleId, List<Long> permissionIds);
-
-    Page<RoleDto> getRoles(Pageable pageable);
-
-
-    Page<RoleDto> getRolesByCriteria(String roleType, Boolean isActive, Long tenantId, Pageable pageable);
-
-
-    RoleDto createRole(RoleDto roleDto, Long creatorId);
-
-
-//    Optional<Role> getRoleById(Long roleId);
-
-//    Role createRole(Role role);
-
-//    Role updateRole(Long roleId, Role roleDetails);
-
-
-
-
+    /** PATCH; a permissions list replaces the role's permissions. */
+    RoleDto update(UUID roleId, UpdateRoleRequest r);
 }

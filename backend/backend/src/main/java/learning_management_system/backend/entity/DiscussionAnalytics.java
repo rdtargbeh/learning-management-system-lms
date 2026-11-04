@@ -1,167 +1,85 @@
 package learning_management_system.backend.entity;
 
 import jakarta.persistence.*;
-import learning_management_system.backend.utility.EngagementDetail;
-import learning_management_system.backend.utility.EngagementDetailsConverter;
-import org.springframework.web.bind.annotation.CrossOrigin;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
 
-import java.time.LocalDateTime;
-import java.util.List;
-
-@CrossOrigin("*")
+/**
+ * Table <b>discussion_analytics</b> (Discussion & Collaboration domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
 @Entity
-@Table(name = "discussion_analytics")
-public class DiscussionAnalytics {
+@Table(name = "discussion_analytics", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class DiscussionAnalytics implements TenantScoped {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "analytics_id")
-    private Long analyticsId;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "analytics_id", updatable = false)
+    private UUID analyticsId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "discussion_id", nullable = false)
-    private Discussion discussion;
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
 
-    @Column(name = "view_count", nullable = false)
-    private int viewCount = 0;
+    @Column(name = "discussion_id", nullable = false)
+    private UUID discussionId;
 
-    @Column(name = "reply_count", nullable = false)
-    private int replyCount = 0;
+    @Column(name = "total_threads")
+    private Integer totalThreads;
 
-    @Column(name = "unique_participants", nullable = false)
-    private int uniqueParticipants = 0;
+    @Column(name = "total_posts")
+    private Integer totalPosts;
 
-    @Column(name = "last_activity")
-    private LocalDateTime lastActivity;
+    @Column(name = "total_unique_participants")
+    private Integer totalUniqueParticipants;
 
-    @Column(name = "average_response_time", nullable = true)
-    private Double averageResponseTime; // Time in minutes
+    @Column(name = "total_views")
+    private Integer totalViews;
 
-    @Column(name = "most_active_participant", nullable = true)
-    private Long mostActiveParticipantId;
+    @Column(name = "avg_posts_per_thread", precision = 8, scale = 2)
+    private BigDecimal avgPostsPerThread;
 
-    @Column(name = "sentiment_score", nullable = true)
-    private Double sentimentScore; // -1.0 (negative) to 1.0 (positive)
+    @Column(name = "avg_reply_time_minutes", precision = 8, scale = 2)
+    private BigDecimal avgReplyTimeMinutes;
 
-//    @Column(name = "engagement_details", columnDefinition = "TEXT")
-//    private String engagementDetails;
+    @Column(name = "most_active_user_id")
+    private UUID mostActiveUserId;
 
-    @Column(name = "engagement_details", columnDefinition = "TEXT")
-    @Convert(converter = EngagementDetailsConverter.class)
-    private List<EngagementDetail> engagementDetails;
+    @Column(name = "most_active_time_slot", length = 50)
+    private String mostActiveTimeSlot;
 
-    // No `dateCreated` or `dateUpdated` since these are covered in Discussion.
+    @Column(name = "sentiment_positive_percent", precision = 5, scale = 2)
+    private BigDecimal sentimentPositivePercent;
 
+    @Column(name = "sentiment_neutral_percent", precision = 5, scale = 2)
+    private BigDecimal sentimentNeutralPercent;
 
-    // Utility methods for updating metrics
-    public void incrementViewCount() {
-        this.viewCount++;
-    }
+    @Column(name = "sentiment_negative_percent", precision = 5, scale = 2)
+    private BigDecimal sentimentNegativePercent;
 
-    public void incrementReplyCount() {
-        this.replyCount++;
-    }
+    @Column(name = "moderation_flags")
+    private Integer moderationFlags;
 
-    public void updateLastActivity(LocalDateTime activityTime) {
-        this.lastActivity = activityTime;
-    }
+    @Column(name = "deleted_posts")
+    private Integer deletedPosts;
 
+    @Column(name = "engagement_score", precision = 5, scale = 2)
+    private BigDecimal engagementScore;
 
-
-    // Constructor
-    public DiscussionAnalytics(){}
-
-    public DiscussionAnalytics(Long analyticsId, Discussion discussion, int viewCount, int replyCount, int uniqueParticipants, LocalDateTime lastActivity, Double averageResponseTime, Long mostActiveParticipantId, Double sentimentScore, List<EngagementDetail> engagementDetails) {
-        this.analyticsId = analyticsId;
-        this.discussion = discussion;
-        this.viewCount = viewCount;
-        this.replyCount = replyCount;
-        this.uniqueParticipants = uniqueParticipants;
-        this.lastActivity = lastActivity;
-        this.averageResponseTime = averageResponseTime;
-        this.mostActiveParticipantId = mostActiveParticipantId;
-        this.sentimentScore = sentimentScore;
-        this.engagementDetails = engagementDetails;
-    }
-
-    // Getter and Setter
-    public Long getAnalyticsId() {
-        return analyticsId;
-    }
-
-    public void setAnalyticsId(Long analyticsId) {
-        this.analyticsId = analyticsId;
-    }
-
-    public Discussion getDiscussion() {
-        return discussion;
-    }
-
-    public void setDiscussion(Discussion discussion) {
-        this.discussion = discussion;
-    }
-
-    public int getViewCount() {
-        return viewCount;
-    }
-
-    public void setViewCount(int viewCount) {
-        this.viewCount = viewCount;
-    }
-
-    public int getReplyCount() {
-        return replyCount;
-    }
-
-    public void setReplyCount(int replyCount) {
-        this.replyCount = replyCount;
-    }
-
-    public int getUniqueParticipants() {
-        return uniqueParticipants;
-    }
-
-    public void setUniqueParticipants(int uniqueParticipants) {
-        this.uniqueParticipants = uniqueParticipants;
-    }
-
-    public LocalDateTime getLastActivity() {
-        return lastActivity;
-    }
-
-    public void setLastActivity(LocalDateTime lastActivity) {
-        this.lastActivity = lastActivity;
-    }
-
-    public Double getAverageResponseTime() {
-        return averageResponseTime;
-    }
-
-    public void setAverageResponseTime(Double averageResponseTime) {
-        this.averageResponseTime = averageResponseTime;
-    }
-
-    public Long getMostActiveParticipantId() {
-        return mostActiveParticipantId;
-    }
-
-    public void setMostActiveParticipantId(Long mostActiveParticipantId) {
-        this.mostActiveParticipantId = mostActiveParticipantId;
-    }
-
-    public Double getSentimentScore() {
-        return sentimentScore;
-    }
-
-    public void setSentimentScore(Double sentimentScore) {
-        this.sentimentScore = sentimentScore;
-    }
-
-    public List<EngagementDetail> getEngagementDetails() {
-        return engagementDetails;
-    }
-
-    public void setEngagementDetails(List<EngagementDetail> engagementDetails) {
-        this.engagementDetails = engagementDetails;
-    }
+    @Column(name = "last_analyzed", nullable = false)
+    private OffsetDateTime lastAnalyzed;
 }

@@ -1,61 +1,78 @@
-package learning_management_system.backend.entity;//package backend.chatgpt_build_lms.entity;
-//
-//import jakarta.persistence.*;
-//import lombok.Data;
-//
-//
-///**
-// * Represents a chapter in an ebook.
-// */
-//
-//@Data
-//@Entity
-//@Table(name = "ebook_chapter")
-//public class EbookChapter {
-//
-//    /** Unique identifier for the chapter. */
-//    @Id
-//    @GeneratedValue(strategy = GenerationType.IDENTITY)
-//    @Column(name = "chapter_id", nullable = false, updatable = false)
-//    private Long chapterId;
-//
-//    /** Many-to-One relationship with the Ebook entity. */
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "ebook_id", nullable = false)
-//    private Ebook ebook;
-//
-//    /** Title of the chapter. */
-//    @Column(name = "title", nullable = false, length = 255)
-//    private String title;
-//
-//    /** Numeric order of the chapter in the ebook. */
-//    @Column(name = "chapter_number", nullable = false)
-//    private Integer chapterNumber;
-//
-//    /** Path or URL to the chapter's content. */
-//    @Column(name = "content_path", nullable = false, length = 500)
-//    private String contentPath;
-//
-//    /** Brief summary of the chapter. */
-//    @Column(name = "summary", columnDefinition = "TEXT")
-//    private String summary;
-//
-//    /** Indicates whether the chapter requires sequential unlocking. */
-//    @Column(name = "is_sequential", nullable = false)
-//    private Boolean isSequential = true;
-//
-//    /** Indicates if the chapter includes an assessment. */
-//    @Column(name = "has_assessment", nullable = false)
-//    private Boolean hasAssessment = false;
-//
-//    /** Estimated time (in minutes) to complete the chapter. */
-//    @Column(name = "estimated_read_time", nullable = true)
-//    private Integer estimatedReadTime;
-//
-//    /** Metadata for extensibility. */
-//    @Column(name = "metadata", columnDefinition = "TEXT")
-//    private String metadata;
-//
-//    // Getters and setters omitted for brevity
-//}
-//
+package learning_management_system.backend.entity;
+
+import jakarta.persistence.*;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+import learning_management_system.backend.security.TenantEntityListener;
+import learning_management_system.backend.security.TenantScoped;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.DynamicInsert;
+import org.hibernate.annotations.DynamicUpdate;
+import org.hibernate.annotations.Generated;
+
+/**
+ * Table <b>ebook_chapter</b> (E-Book Platform domain).
+ * Generated from the PostgreSQL catalog of the final schema (scripts/gen_entities.py); do not edit by hand.
+ * Columns maintained by the database (date_created, date_updated, tenant_id defaults, triggers) are read back.
+ */
+@Entity
+@Table(name = "ebook_chapter", schema = "lms_core")
+@DynamicInsert
+@DynamicUpdate
+@Getter
+@Setter
+@NoArgsConstructor
+@EntityListeners(TenantEntityListener.class)
+public class EbookChapter implements TenantScoped {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "chapter_id", updatable = false)
+    private UUID chapterId;
+
+    @Column(name = "tenant_id", nullable = false)
+    private UUID tenantId;
+
+    @Column(name = "ebook_id", nullable = false)
+    private UUID ebookId;
+
+    @Column(name = "chapter_number", nullable = false)
+    private Integer chapterNumber;
+
+    @Column(name = "chapter_title", nullable = false, length = 255)
+    private String chapterTitle;
+
+    @Column(name = "chapter_description")
+    private String chapterDescription;
+
+    @Column(name = "page_start")
+    private Integer pageStart;
+
+    @Column(name = "page_end")
+    private Integer pageEnd;
+
+    @Column(name = "estimated_reading_time_minutes")
+    private Integer estimatedReadingTimeMinutes;
+
+    @Column(name = "learning_objectives")
+    private String learningObjectives;
+
+    @Column(name = "key_concepts")
+    private String keyConcepts;
+
+    @Column(name = "display_order")
+    private Integer displayOrder;
+
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished;
+
+    @Generated(event = org.hibernate.generator.EventType.INSERT)
+    @Column(name = "date_created", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateCreated;
+
+    @Generated(event = {org.hibernate.generator.EventType.INSERT, org.hibernate.generator.EventType.UPDATE})
+    @Column(name = "date_updated", nullable = false, insertable = false, updatable = false)
+    private OffsetDateTime dateUpdated;
+}

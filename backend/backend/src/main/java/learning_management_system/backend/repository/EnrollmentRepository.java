@@ -2,45 +2,70 @@ package learning_management_system.backend.repository;
 
 import learning_management_system.backend.entity.Enrollment;
 import learning_management_system.backend.enums.EnrollmentStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import learning_management_system.backend.enums.EnrollmentType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
-    List<Enrollment> findByCourse_CourseId(Long courseId);
+public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
 
-    List<Enrollment> findByStudent_StudentId(Long studentId);
+    Optional<Enrollment> findBySectionIdAndUserId(UUID sectionId, UUID userId);
 
-    Optional<Enrollment> findByCourse_CourseIdAndStudent_StudentId(Long courseId, Long studentId);
+    List<Enrollment> findByUserIdOrderByDateEnrolledDesc(UUID userId);
 
-    boolean existsByCourse_CourseIdAndStudent_StudentId(Long courseId, Long studentId);
+    boolean existsBySectionIdAndUserIdAndEnrollmentStatus(UUID sectionId, UUID userId, EnrollmentStatus status);
 
-    Page<Enrollment> findByCourse_CourseId(Long courseId, Pageable pageable);
+    /** Seats in use: active enrollments of the seat-taking types. */
+    long countBySectionIdAndEnrollmentStatusAndEnrollmentTypeIn(UUID sectionId, EnrollmentStatus status,
+                                                                Collection<EnrollmentType> types);
 
-    Page<Enrollment> findByStudent_StudentId(Long studentId, Pageable pageable);
+    @Query("""
+        select e from Enrollment e
+        where e.sectionId = :sectionId
+          and (:status is null or e.enrollmentStatus = :status)
+          and (:type is null or e.enrollmentType = :type)
+        order by e.dateEnrolled, e.enrollmentId
+        """)
+    List<Enrollment> roster(@Param("sectionId") UUID sectionId, @Param("status") EnrollmentStatus status,
+                            @Param("type") EnrollmentType type);
 
-    @Query("SELECT e FROM Enrollment e WHERE e.status = :status")
-    List<Enrollment> findByStatus(@Param("status") EnrollmentStatus status);
+    /** Active enrollment (any type) in any section of the course. */
+    @Query("""
+        select count(e) > 0 from Enrollment e, CourseSection s
+        where e.sectionId = s.sectionId and s.courseId = :courseId and e.userId = :userId
+          and e.enrollmentStatus = learning_management_system.backend.enums.EnrollmentStatus.ACTIVE
+        """)
+    boolean isActiveInCourse(@Param("courseId") UUID courseId, @Param("userId") UUID userId);
 
-    @Query("SELECT COUNT(e) FROM Enrollment e WHERE e.status = :status AND e.course.courseId = :courseId")
-    Long countEnrollmentsByStatusAndCourse(@Param("status") EnrollmentStatus status, @Param("courseId") Long courseId);
+    /** The user's active enrollments (any type) across the sections of a course. */
+    @Query("""
+        select e from Enrollment e, CourseSection s
+        where e.sectionId = s.sectionId and s.courseId = :courseId and e.userId = :userId
+          and e.enrollmentStatus = learning_management_system.backend.enums.EnrollmentStatus.ACTIVE
+        """)
+    List<Enrollment> activeInCourse(@Param("courseId") UUID courseId, @Param("userId") UUID userId);
 
-    @Query("SELECT e.course.courseId, COUNT(e) FROM Enrollment e GROUP BY e.course.courseId")
-    List<Object[]> countEnrollmentsPerCourse();
+    /** Active enrollments of the given types in every section of a course (e.g. all students). */
+    @Query("""
+        select e from Enrollment e, CourseSection s
+        where e.sectionId = s.sectionId and s.courseId = :courseId and e.enrollmentType in :types
+          and e.enrollmentStatus = learning_management_system.backend.enums.EnrollmentStatus.ACTIVE
+        order by e.dateEnrolled
+        """)
+    List<Enrollment> activeInCourseOfTypes(@Param("courseId") UUID courseId, @Param("types") Collection<EnrollmentType> types);
 
-    @Query("SELECT e.status, COUNT(e) FROM Enrollment e WHERE e.enrollmentDate BETWEEN :startDate AND :endDate GROUP BY e.status")
-    List<Object[]> countEnrollmentsByStatusAndDateRange(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
-
-    @Query("SELECT e FROM Enrollment e WHERE e.course.courseId = :courseId AND e.isDeleted = false")
-    List<Enrollment> findActiveEnrollmentsByCourse(@Param("courseId") Long courseId);
-
-
+    /** The user's enrollments in any section of a course with one of these statuses (prerequisite checks). */
+    @Query("""
+        select e from Enrollment e, CourseSection s
+        where e.sectionId = s.sectionId and s.courseId = :courseId and e.userId = :userId and e.enrollmentStatus in :statuses
+        """)
+    List<Enrollment> inCourseWithStatuses(@Param("courseId") UUID courseId, @Param("userId") UUID userId,
+                                          @Param("statuses") Collection<EnrollmentStatus> statuses);
 }

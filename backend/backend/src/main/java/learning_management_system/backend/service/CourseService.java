@@ -1,55 +1,36 @@
 package learning_management_system.backend.service;
 
 import learning_management_system.backend.dto.CourseDto;
-import learning_management_system.backend.dto.UserDto;
+import learning_management_system.backend.dto.CreateCourseRequest;
+import learning_management_system.backend.dto.MyCourseDto;
+import learning_management_system.backend.dto.PageResponse;
+import learning_management_system.backend.dto.SelfEnrollmentSettingsRequest;
+import learning_management_system.backend.dto.UpdateCourseRequest;
 import learning_management_system.backend.enums.CourseStatus;
 
 import java.util.List;
+import java.util.UUID;
 
+/**
+ * Courses: create (COURSE_MANAGE), catalog search (COURSE_READ), the caller's own courses, and the course life cycle
+ * UNPUBLISHED -> PUBLISHED -> CONCLUDED -> ARCHIVED. Teachers can edit, publish and conclude their own course;
+ * archiving needs COURSE_MANAGE. Students see a course only while it is published or concluded.
+ */
 public interface CourseService {
-    List<CourseDto> getAllCourses();
 
-    CourseDto getCourseById(Long id);
+    CourseDto create(CreateCourseRequest r);
 
-    CourseDto createCourse(CourseDto courseDto);
+    PageResponse<CourseDto> search(UUID termId, CourseStatus status, UUID categoryId, UUID orgUnitId, String q, int page, int size);
 
-    CourseDto updateCourse(Long id, CourseDto courseDto);
+    /** Courses the caller teaches or is enrolled in (not archived), for the dashboard. */
+    List<MyCourseDto> mine();
 
-    void deleteCourse(Long id);
+    CourseDto get(UUID courseId);
 
-    List<CourseDto> getPublishedCourses(Boolean isPublished);
+    CourseDto update(UUID courseId, UpdateCourseRequest r);
 
-    List<CourseDto> getPublishedCourses();
+    CourseDto changeStatus(UUID courseId, CourseStatus status);
 
-    List<CourseDto> getCoursesByTeacherId(Long teacherId);
-
-    List<CourseDto> getCoursesByStudentId(Long studentId);
-
-    List<CourseDto> getCoursesByTenant(Long tenantId);
-
-    List<CourseDto> getCoursesByDepartment(Long departmentId);
-
-    List<CourseDto> getActiveCourses();
-
-    List<CourseDto> getCoursesCreatedByUser(Long userId);
-
-    List<UserDto> getEnrolledStudents(Long courseId);
-
-
-    /**
-     * Count courses for a specific tenant.
-     *
-     * @param tenantId The ID of the tenant.
-     * @return The number of courses for the tenant.
-     */
-    long countCoursesByTenantId(Long tenantId);
-
-    /**
-     * Find courses by status.
-     *
-     * @param status The status of the courses to retrieve.
-     * @return A list of courses with the given status.
-     */
-    List<CourseDto> findByCourseStatus(CourseStatus status);
-
+    /** Turns self-enrollment by code on or off; the returned course carries the code. */
+    CourseDto selfEnrollment(UUID courseId, SelfEnrollmentSettingsRequest r);
 }
